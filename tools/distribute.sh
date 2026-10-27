@@ -31,22 +31,8 @@ echo "==> 3. Creating standalone Zip archive..."
 ditto -c -k --keepParent "$app" "$dist/Snip-macOS.zip"
 echo "Created: dist/Snip-macOS.zip"
 
-echo "==> 4. Creating Drag-and-Drop DMG Installer..."
-dmg_root=$(mktemp -d)
-trap 'rm -rf "$dmg_root"' EXIT
-
-cp -R "$app" "$dmg_root/"
-ln -s /Applications "$dmg_root/Applications"
-
-dmg_path="$dist/Snip-Installer.dmg"
-rm -f "$dmg_path"
-hdiutil create -volname "Snip" -srcfolder "$dmg_root" -ov -format UDZO "$dmg_path" >/dev/null
-echo "Created: dist/Snip-Installer.dmg"
-
-# Sign DMG if identity provided
-if [[ -n "$identity" && "$identity" != "-" ]]; then
-  codesign --force --sign "$identity" "$dmg_path"
-fi
+echo "==> 4. Creating Branded Drag-and-Drop DMG Installer..."
+"$repo/scripts/build_dmg.sh"
 
 echo ""
 echo "======================================================="

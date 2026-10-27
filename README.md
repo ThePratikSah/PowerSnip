@@ -77,12 +77,24 @@ cd AiPowerSnip
 ./tools/distribute.sh
 ```
 
+Or build just the branded DMG directly:
+
+```bash
+cd AiPowerSnip
+./scripts/build_dmg.sh
+```
+
 This performs the following steps automatically:
 1. Compiles the release binary with Swift optimization.
-2. Compiles `Assets.xcassets/AppIcon.appiconset` into `AppIcon.icns` (and `Assets.car`).
+2. Compiles `Assets.xcassets/AppIcon.appiconset` into `AppIcon.icns` (and `Snip.icns`).
 3. Assembles the signed `.app` bundle into `~/Applications/Snip.app`.
 4. Packages a standalone ZIP archive at `dist/Snip-macOS.zip` (preserving macOS file attributes).
-5. Packages a drag-and-drop installer disk image at `dist/Snip-Installer.dmg`.
+5. Generates a Retina branded background (1320x840 px @ 2x) with custom "Drag to Install" arrow indicator and pedestal drop targets.
+6. Packages a polished drag-and-drop installer at `dist/Snip-Installer.dmg` with:
+   - Custom `Snip.icns` icon applied to both the `.dmg` file and the mounted volume.
+   - Clean 660 x 420 pt window dimensions with hidden toolbars/path bars.
+   - Fixed icon positions: `Snip.app` on the left (170, 200) and `/Applications` on the right (490, 200).
+   - Sanitized volume free of `.DS_Store`, `._*`, or `.Trashes` clutter.
 
 ---
 
