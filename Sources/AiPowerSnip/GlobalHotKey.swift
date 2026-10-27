@@ -1,8 +1,8 @@
 import AppKit
 import Carbon.HIToolbox
 
-/// Manages system-wide global hotkeys for screen snippet capture.
-/// Registers both Cmd+Option+Shift+4 and Cmd+Shift+4 on the system Event Dispatcher.
+/// Manages system-wide global hotkey for screen snippet capture.
+/// Designated shortcut: Cmd + Option + Shift + 4 (does NOT override macOS Cmd+Shift+4 or Cmd+Shift+3).
 @MainActor
 final class GlobalHotKeyManager {
     static let shared = GlobalHotKeyManager()
@@ -17,7 +17,7 @@ final class GlobalHotKeyManager {
 
         let dispatcher = GetEventDispatcherTarget()
 
-        // 1. Primary: Cmd + Option + Shift + 4
+        // Designated shortcut only: Cmd + Option + Shift + 4
         let id1 = EventHotKeyID(signature: OSType(0x534E5031), id: 1) // 'SNP1', 1
         var ref1: EventHotKeyRef?
         let status1 = RegisterEventHotKey(
@@ -30,27 +30,9 @@ final class GlobalHotKeyManager {
         )
         if status1 == noErr, let r = ref1 {
             hotKeyRefs.append(r)
-            print("Registered global hotkey Cmd+Option+Shift+4 (noErr)")
+            print("Registered designated global hotkey Cmd+Option+Shift+4 (noErr)")
         } else {
             print("Notice: Cmd+Option+Shift+4 status \(status1)")
-        }
-
-        // 2. Secondary: Cmd + Shift + 4 (matches macOS standard snip shortcut)
-        let id2 = EventHotKeyID(signature: OSType(0x534E5032), id: 2) // 'SNP2', 2
-        var ref2: EventHotKeyRef?
-        let status2 = RegisterEventHotKey(
-            UInt32(kVK_ANSI_4),
-            UInt32(cmdKey | shiftKey),
-            id2,
-            dispatcher,
-            0,
-            &ref2
-        )
-        if status2 == noErr, let r = ref2 {
-            hotKeyRefs.append(r)
-            print("Registered global hotkey Cmd+Shift+4 (noErr)")
-        } else {
-            print("Notice: Cmd+Shift+4 status \(status2)")
         }
 
         if !isHandlerInstalled {

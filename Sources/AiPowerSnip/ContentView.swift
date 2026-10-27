@@ -29,53 +29,60 @@ struct ContentView: View {
 
 struct ScreenshotListView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         @Bindable var model = model
-        List(model.screenshots, selection: $model.selection) { screenshot in
-            ScreenshotRowView(screenshot: screenshot)
-                .tag(screenshot.id)
-                .contextMenu {
-                    Button("Delete", role: .destructive) {
-                        model.deleteScreenshot(screenshot)
-                    }
-                }
-        }
-        .listStyle(.sidebar)
-        .overlay {
-            if model.screenshots.isEmpty {
-                ContentUnavailableView(
-                    "No Screenshots",
-                    systemImage: "camera.viewfinder",
-                    description: Text("Press ⌥⇧⌘4 or ⇧⌘4 to snip any section of the screen.")
-                )
-            }
-        }
-        .navigationTitle("Screenshots")
-        .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
-                Menu {
-                    Button(action: {
-                        Task { await ScreenCapture.captureSelection(model: model) }
-                    }) {
-                        Label("Snip Section (⌥⇧⌘4 / ⇧⌘4)", systemImage: "crop")
-                    }
-                    .keyboardShortcut("4", modifiers: [.command, .option, .shift])
+        VStack(spacing: 0) {
+            // Top inset for window traffic light dots
+            Color.clear.frame(height: 32)
 
-                    Button(action: {
-                        Task { await ScreenCapture.captureFullScreen(model: model) }
-                    }) {
-                        Label("Capture Full Screen (⇧⌘3)", systemImage: "macwindow")
+            List(model.screenshots, selection: $model.selection) { screenshot in
+                ScreenshotRowView(screenshot: screenshot)
+                    .tag(screenshot.id)
+                    .contextMenu {
+                        Button("Delete", role: .destructive) {
+                            model.deleteScreenshot(screenshot)
+                        }
                     }
-                    .keyboardShortcut("3", modifiers: [.command, .shift])
-                } label: {
-                    Label("Snip Section", systemImage: "camera.viewfinder")
-                } primaryAction: {
-                    Task { await ScreenCapture.captureSelection(model: model) }
-                }
-                .help("Snip a section of the screen (⌥⇧⌘4 / ⇧⌘4)")
-                .disabled(model.isCapturing)
             }
+            .listStyle(.sidebar)
+            .overlay {
+                if model.screenshots.isEmpty {
+                    ContentUnavailableView(
+                        "No Screenshots",
+                        systemImage: "camera.viewfinder",
+                        description: Text("Press ⌥⇧⌘4 to snip any section of the screen.")
+                    )
+                }
+            }
+
+            Divider()
+
+            // Bottom action bar
+            HStack(spacing: 8) {
+                Button(action: {
+                    Task { await ScreenCapture.captureSelection(model: model) }
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "camera.viewfinder")
+                        Text("Snip (⌥⇧⌘4)")
+                            .fontWeight(.medium)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.regular)
+                .disabled(model.isCapturing)
+
+                Button(action: { openSettings() }) {
+                    Image(systemName: "gearshape")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.regular)
+                .help("Settings (⌘,)")
+            }
+            .padding(10)
         }
     }
 }
@@ -148,24 +155,13 @@ struct ActiveScreenshotCanvas: View {
     @State private var isChatVisible: Bool = true
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
+        ZStack(alignment: .topTrailing) {
             // Main Screenshot Image Area
             screenshotDisplay
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            // Small AI Analysis Chat Overlay Box - Forced Light Mode
-            if isChatVisible {
-                ChatOverlayBox(screenshot: screenshot)
-                    .frame(width: 420, height: 520)
-                    .padding(Space.lg)
-                    .transition(.asymmetric(
-                        insertion: .scale(scale: 0.95).combined(with: .opacity),
-                        removal: .scale(scale: 0.95).combined(with: .opacity)
-                    ))
-            }
-        }
-        .toolbar {
-            ToolbarItem(placement: .automatic) {
+            // Sleek floating controls (headerless layout)
+            HStack(spacing: 8) {
                 Button(action: {
                     withAnimation(.spring(duration: 0.3)) {
                         isChatVisible.toggle()
@@ -174,19 +170,38 @@ struct ActiveScreenshotCanvas: View {
                     Label(isChatVisible ? "Hide Chat" : "Ask Gemini",
                           systemImage: isChatVisible ? "bubble.right.fill" : "sparkles")
                 }
-                .help(isChatVisible ? "Hide question box" : "Show question box")
-            }
+                .buttonStyle(.bordered)
+                .controlSize(.regular)
 
-            ToolbarItem(placement: .destructiveAction) {
-                Button(action: {
+                Button(role: .destructive, action: {
                     model.deleteScreenshot(screenshot)
                 }) {
-                    Label("Delete", systemImage: "trash")
+                    Image(systemName: "trash")
                 }
+                .buttonStyle(.bordered)
+                .controlSize(.regular)
                 .help("Delete screenshot")
             }
+            .padding(.top, 16)
+            .padding(.trailing, 16)
+
+            // Small AI Analysis Chat Overlay Box - Forced Light Mode
+            if isChatVisible {
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        ChatOverlayBox(screenshot: screenshot)
+                            .frame(width: 420, height: 520)
+                            .padding(Space.lg)
+                            .transition(.asymmetric(
+                                insertion: .scale(scale: 0.95).combined(with: .opacity),
+                                removal: .scale(scale: 0.95).combined(with: .opacity)
+                            ))
+                    }
+                }
+            }
         }
-        .navigationTitle(screenshot.title)
     }
 
     private var screenshotDisplay: some View {

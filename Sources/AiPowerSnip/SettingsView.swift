@@ -133,7 +133,7 @@ struct GeneralSettings: View {
                     set: { PrivacyProtectionManager.shared.isScreenCaptureBlocked = $0 }
                 ))
 
-                Text("Excludes AiPowerSnip from Zoom, Google Meet, Teams, Slack, QuickTime, and macOS screenshots (NSWindow.SharingType.none).")
+                Text("Excludes Snip from Zoom, Google Meet, Teams, Slack, QuickTime, and macOS screenshots (NSWindow.SharingType.none).")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
 
@@ -142,7 +142,7 @@ struct GeneralSettings: View {
                 Text("Chat and screenshot data are stored locally in:")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text("~/Library/Application Support/AiPowerSnip/")
+                Text("~/Library/Application Support/Snip/")
                     .font(.system(.caption, design: .monospaced))
                     .foregroundStyle(.primary)
             }

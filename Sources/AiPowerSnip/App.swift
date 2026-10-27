@@ -1,22 +1,22 @@
 import AppKit
 import SwiftUI
 
-// AiPowerSnip
-//   AiPowerSnip                      the app
-//   APP_STORE=<dir> AiPowerSnip      use another store directory (tests, experiments)
-//   APP_SNAPSHOT=<dir> AiPowerSnip   save a PNG of every sidebar page and Settings tab in light and dark mode, then quit
-//   APP_SEED=1 AiPowerSnip           fill an empty store with sample items (tools/snap.sh)
-//   AiPowerSnip --selftest           run the self-test and quit with 0 or 1 (tools/selftest.sh)
-//   APP_ACCENT=<id> AiPowerSnip      run with another accent from Theme.all (UI/Theme.swift)
-//   APP_GRID=1 AiPowerSnip           draw the 8 pt grid and the layout probes over the window
+// Snip
+//   Snip                            the app
+//   APP_STORE=<dir> Snip            use another store directory (tests, experiments)
+//   APP_SNAPSHOT=<dir> Snip         save a PNG of every sidebar page and Settings tab in light and dark mode, then quit
+//   APP_SEED=1 Snip                 fill an empty store with sample items (tools/snap.sh)
+//   Snip --selftest                 run the self-test and quit with 0 or 1 (tools/selftest.sh)
+//   APP_ACCENT=<id> Snip            run with another accent from Theme.all (UI/Theme.swift)
+//   APP_GRID=1 Snip                 draw the 8 pt grid and the layout probes over the window
 
 @main
-struct AiPowerSnipApp: App {
+struct SnipApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @State private var model = AppModel()
 
     var body: some Scene {
-        Window("AiPowerSnip", id: "main") {
+        Window("", id: "main") {
             ContentView()
                 .environment(model)
                 .themed()
@@ -25,10 +25,9 @@ struct AiPowerSnipApp: App {
                 .frame(minWidth: 900, minHeight: 560)
         }
         .defaultSize(width: 1180, height: 750)
-        .windowToolbarStyle(.unified)
+        .windowStyle(.hiddenTitleBar)
         .commands {
             SidebarCommands()
-            ToolbarCommands()
             CommandGroup(after: .appInfo) {
                 Toggle("Hide from Screen Share & Capture", isOn: Binding(
                     get: { PrivacyProtectionManager.shared.isScreenCaptureBlocked },
@@ -41,35 +40,25 @@ struct AiPowerSnipApp: App {
                     Task { await ScreenCapture.captureSelection(model: model) }
                 }
                 .keyboardShortcut("4", modifiers: [.command, .option, .shift])
-
-                Button("Capture Full Screen") {
-                    Task { await ScreenCapture.captureFullScreen(model: model) }
-                }
-                .keyboardShortcut("3", modifiers: [.command, .shift])
             }
         }
 
         // Keep running in menu bar as a background utility
-        MenuBarExtra("AiPowerSnip", systemImage: "camera.viewfinder") {
+        MenuBarExtra("Snip", systemImage: "camera.viewfinder") {
             Button("Snip Section (⌥⇧⌘4)") {
                 Task { await ScreenCapture.captureSelection(model: model) }
             }
             .keyboardShortcut("4", modifiers: [.command, .option, .shift])
 
-            Button("Capture Full Screen (⇧⌘3)") {
-                Task { await ScreenCapture.captureFullScreen(model: model) }
-            }
-            .keyboardShortcut("3", modifiers: [.command, .shift])
-
             Divider()
 
-            Button("Open AiPowerSnip Window") {
+            Button("Open Snip Window") {
                 AppDelegate.showMainWindow()
             }
 
             Divider()
 
-            Button("Quit AiPowerSnip") {
+            Button("Quit Snip") {
                 NSApp.terminate(nil)
             }
             .keyboardShortcut("q", modifiers: [.command])
@@ -96,15 +85,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             return
         }
 
-        // Hook main window to prevent deallocation on close
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+        // Hook main window: hide titlebar and make background draggable
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
             if let window = NSApp.windows.first(where: { $0.canBecomeMain && !$0.isSheet }) {
                 self?.mainWindow = window
                 window.delegate = self
+                window.titleVisibility = .hidden
+                window.titlebarAppearsTransparent = true
+                window.styleMask.insert(.fullSizeContentView)
+                window.isMovableByWindowBackground = true
             }
         }
 
-        // Register system-wide global hotkeys (Cmd+Opt+Shift+4 and Cmd+Shift+4)
+        // Register system-wide designated global hotkey: Cmd+Option+Shift+4 only
         GlobalHotKeyManager.shared.register {
             Task { @MainActor in
                 if let model = AppModel.shared {
@@ -137,7 +130,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         NSApp.unhideWithoutActivation()
         NSApp.activate(ignoringOtherApps: true)
         for window in NSApp.windows where !window.isSheet {
-            if window.canBecomeMain || window.title.contains("AiPowerSnip") || window.title.contains("Snip") {
+            if window.canBecomeMain || window.title.contains("Snip") {
                 window.makeKeyAndOrderFront(nil)
                 return
             }

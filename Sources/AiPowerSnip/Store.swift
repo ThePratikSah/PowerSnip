@@ -18,7 +18,12 @@ public enum Store {
             try? FileManager.default.createDirectory(at: directURL, withIntermediateDirectories: true)
             return directURL
         }
-        let dir = URL.applicationSupportDirectory.appending(path: "AiPowerSnip", directoryHint: .isDirectory)
+        let dir = URL.applicationSupportDirectory.appending(path: "Snip", directoryHint: .isDirectory)
+        // Seamless migration from legacy AiPowerSnip directory if present
+        let legacyDir = URL.applicationSupportDirectory.appending(path: "AiPowerSnip", directoryHint: .isDirectory)
+        if !FileManager.default.fileExists(atPath: dir.path) && FileManager.default.fileExists(atPath: legacyDir.path) {
+            try? FileManager.default.copyItem(at: legacyDir, to: dir)
+        }
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }
