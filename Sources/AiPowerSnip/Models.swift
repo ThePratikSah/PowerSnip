@@ -104,6 +104,8 @@ public enum SidebarItem: String, CaseIterable, Identifiable {
 /// App-wide state that views, menus, and services share.
 @Observable
 final class AppModel {
+    static var shared: AppModel?
+
     var screenshots: [Screenshot] = []
     var selection: UUID?
     var sidebar: SidebarItem? = .all
@@ -122,6 +124,7 @@ final class AppModel {
         self.storeDirectory = storeDirectory
         self.screenshots = Store.loadScreenshots(from: storeDirectory)
         self.selection = self.screenshots.first?.id
+        AppModel.shared = self
     }
 
     var selectedScreenshot: Screenshot? {

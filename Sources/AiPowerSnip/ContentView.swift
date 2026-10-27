@@ -45,7 +45,7 @@ struct ScreenshotListView: View {
                 ContentUnavailableView(
                     "No Screenshots",
                     systemImage: "camera.viewfinder",
-                    description: Text("Press ⇧⌘N to select and snip any section of the screen.")
+                    description: Text("Press ⌥⇧⌘4 to select and snip any section of the screen.")
                 )
             }
         }
@@ -58,7 +58,7 @@ struct ScreenshotListView: View {
                     }) {
                         Label("Snip Section (Drag Area)", systemImage: "crop")
                     }
-                    .keyboardShortcut("n", modifiers: [.command, .shift])
+                    .keyboardShortcut("4", modifiers: [.command, .option, .shift])
 
                     Button(action: {
                         Task { await ScreenCapture.captureFullScreen(model: model) }
@@ -71,7 +71,7 @@ struct ScreenshotListView: View {
                 } primaryAction: {
                     Task { await ScreenCapture.captureSelection(model: model) }
                 }
-                .help("Snip a section of the screen (⇧⌘N)")
+                .help("Snip a section of the screen (⌥⇧⌘4)")
                 .disabled(model.isCapturing)
             }
         }

@@ -32,12 +32,12 @@ struct AiPowerSnipApp: App {
                 Button("Snip Section…") {
                     Task { await ScreenCapture.captureSelection(model: model) }
                 }
-                .keyboardShortcut("n", modifiers: [.command, .shift])
+                .keyboardShortcut("4", modifiers: [.command, .option, .shift])
 
                 Button("Capture Full Screen") {
                     Task { await ScreenCapture.captureFullScreen(model: model) }
                 }
-                .keyboardShortcut("3", modifiers: [.command, .shift])
+                .keyboardShortcut("3", modifiers: [.command, .option, .shift])
             }
         }
 
@@ -54,6 +54,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate()
+
+        // Register system-wide global hotkey Cmd + Option + Shift + 4
+        GlobalHotKeyManager.shared.register {
+            Task { @MainActor in
+                if let model = AppModel.shared {
+                    await ScreenCapture.captureSelection(model: model)
+                }
+            }
+        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
