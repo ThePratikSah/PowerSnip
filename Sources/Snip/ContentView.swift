@@ -8,8 +8,10 @@ struct ContentView: View {
     var body: some View {
         NavigationSplitView {
             sidebar
+        } content: {
+            imageContent
         } detail: {
-            ScreenshotDetailView()
+            chatDetail
         }
         .navigationSplitViewStyle(.balanced)
         .safeAreaInset(edge: .top) {
@@ -26,6 +28,37 @@ struct ContentView: View {
             Snapshot.runIfRequested(model: model, openSettings: openSettings)
             permissionManager.checkPermission()
         }
+    }
+
+    private var imageContent: some View {
+        Group {
+            if let screenshot = model.selectedScreenshot {
+                ScreenshotImageCanvas(screenshot: screenshot)
+            } else {
+                ContentUnavailableView(
+                    "No Screenshot Selected",
+                    systemImage: "photo.badge.plus",
+                    description: Text("Press ⌥⇧⌘4 to snip a section of your screen.")
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .navigationSplitViewColumnWidth(min: 400, ideal: 600)
+    }
+
+    private var chatDetail: some View {
+        Group {
+            if let screenshot = model.selectedScreenshot {
+                FullHeightChatPane(screenshot: screenshot)
+            } else {
+                VStack(spacing: 12) {
+                    Image(systemName: "sparkles").font(.system(size: 36)).foregroundStyle(.secondary)
+                    Text("Select a screenshot").font(.callout).foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .navigationSplitViewColumnWidth(min: 340, ideal: 400, max: 500)
     }
 
     private var permissionMissingBanner: some View {
@@ -156,9 +189,18 @@ struct ScreenshotRowView: View {
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(screenshot.title)
-                    .font(.callout.weight(.medium))
-                    .lineLimit(1)
+                if screenshot.isGeneratingTitle {
+                    HStack(spacing: 4) {
+                        ProgressView().controlSize(.mini)
+                        Text("Analyzing…")
+                            .font(.callout.weight(.medium))
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    Text(screenshot.title)
+                        .font(.callout.weight(.medium))
+                        .lineLimit(1)
+                }
                 HStack(spacing: 4) {
                     Text(screenshot.createdAt, style: .time)
                     if !screenshot.messages.isEmpty {
@@ -175,77 +217,22 @@ struct ScreenshotRowView: View {
     }
 }
 
-// MARK: - Detail View
+// MARK: - Image Canvas (no chat overlay)
 
-struct ScreenshotDetailView: View {
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        if let screenshot = model.selectedScreenshot {
-            ActiveScreenshotCanvas(screenshot: screenshot)
-        } else {
-            ContentUnavailableView(
-                "No Screenshot Selected",
-                systemImage: "photo.badge.plus",
-                description: Text("Press ⌥⇧⌘4 to snip a section of your screen.")
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-    }
-}
-
-struct ActiveScreenshotCanvas: View {
+struct ScreenshotImageCanvas: View {
     @Environment(AppModel.self) private var model
     @Bindable var screenshot: Screenshot
-    @State private var isChatVisible: Bool = true
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            // Main Screenshot Image Area
-            screenshotDisplay
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            screenshotDisplay.frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            // Sleek floating controls (headerless layout)
-            HStack(spacing: 8) {
-                Button(action: {
-                    withAnimation(.spring(duration: 0.3)) {
-                        isChatVisible.toggle()
-                    }
-                }) {
-                    Label(isChatVisible ? "Hide Chat" : "Ask Gemini",
-                          systemImage: isChatVisible ? "bubble.right.fill" : "sparkles")
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.regular)
-
-                Button(role: .destructive, action: {
-                    model.deleteScreenshot(screenshot)
-                }) {
-                    Image(systemName: "trash")
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.regular)
-                .help("Delete screenshot")
+            // Only delete button in top right
+            Button(role: .destructive, action: { model.deleteScreenshot(screenshot) }) {
+                Image(systemName: "trash")
             }
-            .padding(.top, 16)
-            .padding(.trailing, 16)
-
-            // Small AI Analysis Chat Overlay Box - Forced Light Mode
-            if isChatVisible {
-                VStack {
-                    Spacer()
-                    HStack {
-                        Spacer()
-                        ChatOverlayBox(screenshot: screenshot)
-                            .frame(width: 420, height: 520)
-                            .padding(Space.lg)
-                            .transition(.asymmetric(
-                                insertion: .scale(scale: 0.95).combined(with: .opacity),
-                                removal: .scale(scale: 0.95).combined(with: .opacity)
-                            ))
-                    }
-                }
-            }
+            .buttonStyle(.bordered).controlSize(.regular)
+            .padding(.top, 16).padding(.trailing, 16)
         }
     }
 
@@ -280,11 +267,12 @@ struct ActiveScreenshotCanvas: View {
     }
 }
 
-// MARK: - Small AI Chat Box Overlay (FORCED LIGHT MODE)
+// MARK: - Full Height Chat Pane (right column)
 
-struct ChatOverlayBox: View {
+struct FullHeightChatPane: View {
     @Environment(AppModel.self) private var model
     @Bindable var screenshot: Screenshot
+
     @State private var inputPrompt: String = ""
     @State private var isAnalyzing: Bool = false
     @State private var currentError: GeminiError? = nil
@@ -296,48 +284,26 @@ struct ChatOverlayBox: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
             chatHeader
-            Divider().background(Color(hex: 0xE5E7EB))
-
-            // API key missing banner
+            Divider()
             if !GeminiService.hasAPIKey {
                 apiKeyWarningBanner
-                Divider().background(Color(hex: 0xE5E7EB))
+                Divider()
             }
-
-            // Message Scroll Stream
             chatHistory
-            Divider().background(Color(hex: 0xE5E7EB))
-
-            // Quick suggestion chips (if conversation is fresh)
+            Divider()
             if screenshot.messages.isEmpty {
                 suggestionChips
-                Divider().background(Color(hex: 0xE5E7EB))
+                Divider()
             }
-
-            // Input bar
             chatInputBar
         }
-        // FORCED 100% LIGHT MODE WITH SOLID WHITE BACKGROUND (NO DARK TINT FROM SCREENSHOT)
         .environment(\.colorScheme, .light)
         .preferredColorScheme(.light)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.white)
-                .shadow(color: Color.black.opacity(0.16), radius: 24, x: 0, y: 8)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color(hex: 0xE2E8F0), lineWidth: 1)
-        )
+        .background(Color.white)
         .sheet(isPresented: $showAPIKeySheet) {
             GeminiAPIKeySheet(isPresented: $showAPIKeySheet) {
-                if let query = pendingQuery {
-                    pendingQuery = nil
-                    sendQuery(text: query)
-                }
+                if let query = pendingQuery { pendingQuery = nil; sendQuery(text: query) }
             }
         }
         .onAppear {
@@ -353,91 +319,67 @@ struct ChatOverlayBox: View {
     }
 
     private var chatHeader: some View {
-        HStack(spacing: Space.sm) {
-            Image(systemName: "sparkles")
-                .font(.headline)
-                .foregroundStyle(Palette.accent)
-
+        HStack(spacing: 8) {
+            Image(systemName: "sparkles").font(.headline).foregroundStyle(.purple)
             VStack(alignment: .leading, spacing: 1) {
-                Text("Gemini Snip Assistant")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Color(hex: 0x111827))
-                Text("Ask anything about this screenshot")
-                    .font(.caption2)
-                    .foregroundStyle(Color(hex: 0x6B7280))
+                Text("Gemini Snip Assistant").font(.subheadline.weight(.semibold)).foregroundStyle(Color(hex: 0x111827))
+                Text("Ask anything about this screenshot").font(.caption2).foregroundStyle(.secondary)
             }
-
             Spacer()
 
-            // Dynamic Model Switcher Menu in header
+            // Model picker
             Menu {
                 ForEach(availableModels) { m in
-                    Button(action: {
-                        selectedModel = m.shortName
-                        GeminiService.model = m.shortName
-                    }) {
+                    Button(action: { selectedModel = m.shortName; GeminiService.model = m.shortName }) {
                         HStack {
                             Text(m.displayName)
-                            if m.shortName == selectedModel || m.name == selectedModel {
-                                Image(systemName: "checkmark")
-                            }
+                            if m.shortName == selectedModel { Image(systemName: "checkmark") }
                         }
                     }
                 }
             } label: {
                 HStack(spacing: 4) {
-                    Image(systemName: "cpu")
-                        .font(.system(size: 10))
-                    Text(selectedModel.replacingOccurrences(of: "models/", with: ""))
-                        .font(.system(size: 11, weight: .medium))
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.system(size: 8))
+                    Image(systemName: "cpu").font(.system(size: 10))
+                    Text(selectedModel.replacingOccurrences(of: "models/", with: "")).font(.system(size: 11, weight: .medium))
+                    Image(systemName: "chevron.up.chevron.down").font(.system(size: 8))
                 }
                 .foregroundStyle(Color(hex: 0x374151))
-                .padding(.horizontal, 7)
-                .padding(.vertical, 3)
+                .padding(.horizontal, 7).padding(.vertical, 3)
                 .background(Color(hex: 0xF3F4F6), in: Capsule())
                 .overlay(Capsule().stroke(Color(hex: 0xE5E7EB), lineWidth: 1))
             }
             .buttonStyle(.plain)
-            .help("Switch Gemini AI Model")
 
-            // API Key status/config button
+            // API key button
             Button(action: { showAPIKeySheet = true }) {
                 HStack(spacing: 3) {
-                    Image(systemName: "key.fill")
-                        .font(.system(size: 11))
-                        .foregroundStyle(GeminiService.hasAPIKey ? Color.green : Color.orange)
+                    Image(systemName: "key.fill").font(.system(size: 11)).foregroundStyle(GeminiService.hasAPIKey ? .green : .orange)
                     if !GeminiService.hasAPIKey {
-                        Text("Add Key")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(Color.orange)
+                        Text("Add Key").font(.system(size: 10, weight: .semibold)).foregroundStyle(.orange)
                     }
                 }
-                .padding(.horizontal, 6)
-                .padding(.vertical, 3)
-                .background(
-                    (GeminiService.hasAPIKey ? Color.green : Color.orange).opacity(0.12),
-                    in: Capsule()
-                )
+                .padding(.horizontal, 6).padding(.vertical, 3)
+                .background((GeminiService.hasAPIKey ? Color.green : Color.orange).opacity(0.12), in: Capsule())
             }
             .buttonStyle(.plain)
-            .help(GeminiService.hasAPIKey ? "Configure Gemini API Key" : "Set Gemini API Key to enable AI analysis")
 
+            // Clear conversation
             if !screenshot.messages.isEmpty {
-                Button(action: {
-                    model.clearMessages(for: screenshot)
-                }) {
-                    Image(systemName: "trash")
-                        .font(.caption)
-                        .foregroundStyle(Color(hex: 0x9CA3AF))
-                }
-                .buttonStyle(.plain)
-                .help("Clear conversation")
+                Button(action: { model.clearMessages(for: screenshot) }) {
+                    Image(systemName: "trash").font(.caption).foregroundStyle(Color(hex: 0x9CA3AF))
+                }.buttonStyle(.plain).help("Clear conversation")
             }
+
+            // Detach to floating HUD
+            Button(action: {
+                WindowManager.shared.detachToFloating(screenshotId: screenshot.id)
+            }) {
+                Image(systemName: "pip.exit").font(.system(size: 12)).foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Detach to Floating Window")
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 14).padding(.vertical, 10)
         .background(Color.white)
     }
 
@@ -460,8 +402,7 @@ struct ChatOverlayBox: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 12).padding(.vertical, 8)
             .background(Color.orange.opacity(0.08))
         }
         .buttonStyle(.plain)
@@ -494,89 +435,8 @@ struct ChatOverlayBox: View {
                         .id("analyzing_spinner")
                     }
 
-                    // Intuitive Rate Limit & API Error Resolution Card with Model Switcher
                     if let error = currentError {
-                        VStack(alignment: .leading, spacing: 10) {
-                            HStack(alignment: .top, spacing: 8) {
-                                Image(systemName: error.isRateLimit ? "exclamationmark.triangle.fill" : "xmark.octagon.fill")
-                                    .foregroundStyle(error.isRateLimit ? .orange : .red)
-                                    .font(.title3)
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(error.isRateLimit ? "Rate Limit Exceeded (429)" : "API Request Failed")
-                                        .font(.callout.weight(.semibold))
-                                        .foregroundStyle(error.isRateLimit ? Color(hex: 0x9A3412) : Color(hex: 0x991B1B))
-
-                                    Text(error.isRateLimit
-                                         ? "The model '\(selectedModel.replacingOccurrences(of: "models/", with: ""))' reached its quota or request rate limit. Switch to an alternate model below to continue immediately."
-                                         : (error.errorDescription ?? "An error occurred while contacting the Gemini API."))
-                                        .font(.caption2)
-                                        .foregroundStyle(Color(hex: 0x374151))
-                                        .fixedSize(horizontal: false, vertical: true)
-                                }
-
-                                Spacer()
-
-                                Button(action: { currentError = nil }) {
-                                    Image(systemName: "xmark")
-                                        .font(.caption2)
-                                        .foregroundStyle(Color(hex: 0x6B7280))
-                                }
-                                .buttonStyle(.plain)
-                            }
-
-                            // Model switcher dropdown inside the error resolution card
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Switch Model:")
-                                    .font(.caption2.weight(.medium))
-                                    .foregroundStyle(Color(hex: 0x4B5563))
-
-                                Picker("Switch Model", selection: $selectedModel) {
-                                    ForEach(availableModels) { m in
-                                        Text(m.displayName).tag(m.shortName)
-                                    }
-                                }
-                                .labelsHidden()
-                                .onChange(of: selectedModel) { _, newModel in
-                                    GeminiService.model = newModel
-                                }
-                            }
-
-                            // Action buttons: Retry and Dismiss
-                            HStack(spacing: 8) {
-                                if let _ = lastFailedQuery {
-                                    Button(action: {
-                                        retryFailedQuery()
-                                    }) {
-                                        HStack(spacing: 4) {
-                                            Image(systemName: "arrow.clockwise")
-                                            Text("Retry with \(selectedModel.replacingOccurrences(of: "models/", with: ""))")
-                                        }
-                                        .font(.caption.weight(.medium))
-                                    }
-                                    .buttonStyle(.borderedProminent)
-                                    .controlSize(.small)
-                                }
-
-                                Button("Dismiss") {
-                                    currentError = nil
-                                }
-                                .buttonStyle(.bordered)
-                                .controlSize(.small)
-                            }
-                            .padding(.top, 2)
-                        }
-                        .padding(12)
-                        .background(
-                            (error.isRateLimit ? Color.orange : Color.red).opacity(0.08),
-                            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .stroke((error.isRateLimit ? Color.orange : Color.red).opacity(0.25), lineWidth: 1)
-                        )
-                        .padding(.horizontal, 4)
-                        .id("error_resolution_card")
+                        errorCard(error: error)
                     }
                 }
                 .padding(12)
@@ -598,6 +458,84 @@ struct ChatOverlayBox: View {
                 }
             }
         }
+    }
+
+    private func errorCard(error: GeminiError) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: error.isRateLimit ? "exclamationmark.triangle.fill" : "xmark.octagon.fill")
+                    .foregroundStyle(error.isRateLimit ? .orange : .red)
+                    .font(.title3)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(error.isRateLimit ? "Rate Limit Exceeded (429)" : "API Request Failed")
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(error.isRateLimit ? Color(hex: 0x9A3412) : Color(hex: 0x991B1B))
+
+                    Text(error.isRateLimit
+                         ? "The model '\(selectedModel.replacingOccurrences(of: "models/", with: ""))' reached its quota. Switch to an alternate model below."
+                         : (error.errorDescription ?? "An error occurred while contacting the Gemini API."))
+                        .font(.caption2)
+                        .foregroundStyle(Color(hex: 0x374151))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer()
+
+                Button(action: { currentError = nil }) {
+                    Image(systemName: "xmark")
+                        .font(.caption2)
+                        .foregroundStyle(Color(hex: 0x6B7280))
+                }
+                .buttonStyle(.plain)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Switch Model:")
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(Color(hex: 0x4B5563))
+
+                Picker("Switch Model", selection: $selectedModel) {
+                    ForEach(availableModels) { m in
+                        Text(m.displayName).tag(m.shortName)
+                    }
+                }
+                .labelsHidden()
+                .onChange(of: selectedModel) { _, newModel in
+                    GeminiService.model = newModel
+                }
+            }
+
+            HStack(spacing: 8) {
+                if lastFailedQuery != nil {
+                    Button(action: { retryFailedQuery() }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.clockwise")
+                            Text("Retry with \(selectedModel.replacingOccurrences(of: "models/", with: ""))")
+                        }
+                        .font(.caption.weight(.medium))
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
+
+                Button("Dismiss") { currentError = nil }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+            }
+            .padding(.top, 2)
+        }
+        .padding(12)
+        .background(
+            (error.isRateLimit ? Color.orange : Color.red).opacity(0.08),
+            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke((error.isRateLimit ? Color.orange : Color.red).opacity(0.25), lineWidth: 1)
+        )
+        .padding(.horizontal, 4)
+        .id("error_resolution_card")
     }
 
     private var emptyPromptView: some View {
@@ -703,7 +641,6 @@ struct ChatOverlayBox: View {
         isAnalyzing = true
         lastFailedQuery = text
 
-        // Add user query message
         model.addMessage(to: screenshot, role: .user, content: text)
 
         guard let data = screenshot.loadData(from: model.storeDirectory) else {

@@ -74,6 +74,19 @@ enum ScreenCapture {
             let titlePrefix = (mode == .interactive) ? "Snip" : "Screen"
             let title = "\(titlePrefix) \(DateFormatter.shortFormat.string(from: .now))"
             model.addScreenshot(imageData: data, title: title)
+
+            // Show floating HUD instead of main window for hotkey-triggered captures
+            if let id = model.selection {
+                WindowManager.shared.showFloatingPanel(for: id)
+            }
+
+            // Generate AI title in background (non-fatal if it fails)
+            if let screenshot = model.selectedScreenshot {
+                screenshot.isGeneratingTitle = true
+                Task {
+                    await TitleGenerator.generateTitle(for: screenshot, model: model)
+                }
+            }
         }
     }
 }

@@ -107,7 +107,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             Task { @MainActor in
                 if let model = AppModel.shared {
                     await ScreenCapture.captureSelection(model: model)
-                    Self.showMainWindow()
+                    // WindowManager.showFloatingPanel is called inside ScreenCapture now
                 }
             }
         }

@@ -31,6 +31,8 @@ public final class Screenshot: Identifiable, Codable, Equatable {
     public var createdAt: Date
     public var imageFileName: String
     public var messages: [ChatMessage]
+    /// Transient flag — true while TitleGenerator is running. Not persisted to JSON.
+    public var isGeneratingTitle: Bool = false
 
     public enum CodingKeys: String, CodingKey {
         case id, title, createdAt, imageFileName, messages
@@ -169,6 +171,12 @@ final class AppModel {
 
     func clearMessages(for screenshot: Screenshot) {
         screenshot.messages.removeAll()
+        save()
+    }
+
+    func updateTitle(for screenshot: Screenshot, title: String) {
+        screenshot.title = title
+        screenshot.isGeneratingTitle = false
         save()
     }
 
