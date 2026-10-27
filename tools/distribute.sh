@@ -31,9 +31,6 @@ echo "==> 3. Creating standalone Zip archive..."
 ditto -c -k --keepParent "$app" "$dist/Snip-macOS.zip"
 echo "Created: dist/Snip-macOS.zip"
 
-echo "==> 4. Creating Branded Drag-and-Drop DMG Installer..."
-"$repo/scripts/build_dmg.sh"
-
 echo ""
 echo "======================================================="
 echo " Distribution artifacts ready in: $dist"
