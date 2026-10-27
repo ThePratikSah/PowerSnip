@@ -7,7 +7,7 @@ final class FloatingChatWindow: NSPanel {
 
     init() {
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 420, height: 580),
+            contentRect: NSRect(x: 0, y: 0, width: 580, height: 680),
             styleMask: [.titled, .closable, .resizable, .fullSizeContentView, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -58,7 +58,8 @@ struct FloatingChatView: View {
     var body: some View {
         Group {
             if let model, let id = WindowManager.shared.activeScreenshotId,
-               let screenshot = model.screenshots.first(where: { $0.id == id }) {
+                let screenshot = model.screenshots.first(where: { $0.id == id })
+            {
                 FloatingChatContent(screenshot: screenshot, model: model)
             } else {
                 waitingView
@@ -66,7 +67,9 @@ struct FloatingChatView: View {
         }
         .environment(\.colorScheme, .light)
         .preferredColorScheme(.light)
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didFinishLaunchingNotification)) { _ in
+        .onReceive(
+            NotificationCenter.default.publisher(for: NSApplication.didFinishLaunchingNotification)
+        ) { _ in
             model = AppModel.shared
         }
     }
@@ -134,7 +137,8 @@ struct FloatingChatContent: View {
             selectedModel = GeminiService.model
             if GeminiService.hasAPIKey {
                 Task {
-                    if let models = try? await GeminiService.getMultimodalModels(), !models.isEmpty {
+                    if let models = try? await GeminiService.getMultimodalModels(), !models.isEmpty
+                    {
                         availableModels = models
                     }
                 }
@@ -151,7 +155,9 @@ struct FloatingChatContent: View {
                     .aspectRatio(contentMode: .fill)
                     .frame(width: 40, height: 28)
                     .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).stroke(Color.black.opacity(0.1), lineWidth: 1))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 5, style: .continuous).stroke(
+                            Color.black.opacity(0.1), lineWidth: 1))
             }
 
             VStack(alignment: .leading, spacing: 1) {
@@ -196,7 +202,8 @@ struct FloatingChatContent: View {
             } label: {
                 HStack(spacing: 3) {
                     Image(systemName: "cpu").font(.system(size: 9))
-                    Text(selectedModel.replacingOccurrences(of: "models/", with: "")).font(.system(size: 10, weight: .medium))
+                    Text(selectedModel.replacingOccurrences(of: "models/", with: "")).font(
+                        .system(size: 10, weight: .medium))
                     Image(systemName: "chevron.up.chevron.down").font(.system(size: 8))
                 }
                 .foregroundStyle(Color(hex: 0x374151))
@@ -231,10 +238,13 @@ struct FloatingChatContent: View {
     private var apiKeyWarningBanner: some View {
         Button(action: { showAPIKeySheet = true }) {
             HStack(spacing: 8) {
-                Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.orange).font(.subheadline)
+                Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.orange).font(
+                    .subheadline)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Gemini API Key Required").font(.caption.weight(.semibold)).foregroundStyle(Color(hex: 0x1F2937))
-                    Text("Click here to paste your free Google Gemini API key.").font(.caption2).foregroundStyle(Color(hex: 0x4B5563))
+                    Text("Gemini API Key Required").font(.caption.weight(.semibold))
+                        .foregroundStyle(Color(hex: 0x1F2937))
+                    Text("Click here to paste your free Google Gemini API key.").font(.caption2)
+                        .foregroundStyle(Color(hex: 0x4B5563))
                 }
                 Spacer()
                 Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.secondary)
@@ -249,8 +259,9 @@ struct FloatingChatContent: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
-                    if screenshot.messages.isEmpty { emptyPromptView }
-                    else {
+                    if screenshot.messages.isEmpty {
+                        emptyPromptView
+                    } else {
                         ForEach(screenshot.messages) { msg in
                             ChatMessageBubble(message: msg).id(msg.id)
                         }
@@ -258,10 +269,14 @@ struct FloatingChatContent: View {
                     if isAnalyzing {
                         HStack(spacing: 8) {
                             ProgressView().controlSize(.small)
-                            Text("Thinking…").font(.caption.weight(.medium)).foregroundStyle(Color(hex: 0x4B5563))
+                            Text("Thinking…").font(.caption.weight(.medium)).foregroundStyle(
+                                Color(hex: 0x4B5563))
                         }
                         .padding(.horizontal, 14).padding(.vertical, 8)
-                        .background(Color(hex: 0xF3F4F6), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .background(
+                            Color(hex: 0xF3F4F6),
+                            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        )
                         .id("analyzing_spinner")
                     }
                     if let error = currentError {
@@ -282,13 +297,19 @@ struct FloatingChatContent: View {
     private func errorCard(error: GeminiError) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 8) {
-                Image(systemName: error.isRateLimit ? "exclamationmark.triangle.fill" : "xmark.octagon.fill")
-                    .foregroundStyle(error.isRateLimit ? .orange : .red).font(.title3)
+                Image(
+                    systemName: error.isRateLimit
+                        ? "exclamationmark.triangle.fill" : "xmark.octagon.fill"
+                )
+                .foregroundStyle(error.isRateLimit ? .orange : .red).font(.title3)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(error.isRateLimit ? "Rate Limit Exceeded" : "API Error")
                         .font(.callout.weight(.semibold))
-                        .foregroundStyle(error.isRateLimit ? Color(hex: 0x9A3412) : Color(hex: 0x991B1B))
-                    Text(error.errorDescription ?? "An error occurred.").font(.caption2).foregroundStyle(Color(hex: 0x374151)).fixedSize(horizontal: false, vertical: true)
+                        .foregroundStyle(
+                            error.isRateLimit ? Color(hex: 0x9A3412) : Color(hex: 0x991B1B))
+                    Text(error.errorDescription ?? "An error occurred.").font(.caption2)
+                        .foregroundStyle(Color(hex: 0x374151)).fixedSize(
+                            horizontal: false, vertical: true)
                 }
                 Spacer()
                 Button(action: { currentError = nil }) {
@@ -303,23 +324,36 @@ struct FloatingChatContent: View {
             HStack(spacing: 8) {
                 if lastFailedQuery != nil {
                     Button(action: retryFailedQuery) {
-                        HStack(spacing: 4) { Image(systemName: "arrow.clockwise"); Text("Retry") }
-                            .font(.caption.weight(.medium))
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.clockwise")
+                            Text("Retry")
+                        }
+                        .font(.caption.weight(.medium))
                     }.buttonStyle(.borderedProminent).controlSize(.small)
                 }
                 Button("Dismiss") { currentError = nil }.buttonStyle(.bordered).controlSize(.small)
             }
         }
         .padding(12)
-        .background((error.isRateLimit ? Color.orange : Color.red).opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke((error.isRateLimit ? Color.orange : Color.red).opacity(0.25), lineWidth: 1))
+        .background(
+            (error.isRateLimit ? Color.orange : Color.red).opacity(0.08),
+            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(
+                (error.isRateLimit ? Color.orange : Color.red).opacity(0.25), lineWidth: 1))
     }
 
     private var emptyPromptView: some View {
         VStack(spacing: 8) {
-            Image(systemName: "sparkles").font(.system(size: 32)).foregroundStyle(.purple.opacity(0.8)).padding(.top, 12)
-            Text("Ask Gemini about this screen").font(.callout.weight(.semibold)).foregroundStyle(Color(hex: 0x111827))
-            Text("Type any question or pick a suggestion below.").font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center).padding(.horizontal, 16)
+            Image(systemName: "sparkles").font(.system(size: 32)).foregroundStyle(
+                .purple.opacity(0.8)
+            ).padding(.top, 12)
+            Text("Ask Gemini about this screen").font(.callout.weight(.semibold)).foregroundStyle(
+                Color(hex: 0x111827))
+            Text("Type any question or pick a suggestion below.").font(.caption).foregroundStyle(
+                .secondary
+            ).multilineTextAlignment(.center).padding(.horizontal, 16)
         }
         .frame(maxWidth: .infinity).padding(.vertical, 16)
     }
@@ -338,7 +372,10 @@ struct FloatingChatContent: View {
     }
 
     private func chip(_ text: String) -> some View {
-        Button(action: { inputPrompt = text; triggerSend() }) {
+        Button(action: {
+            inputPrompt = text
+            triggerSend()
+        }) {
             Text(text).font(.caption2.weight(.medium)).foregroundStyle(Color(hex: 0x374151))
                 .padding(.horizontal, 10).padding(.vertical, 5)
                 .background(Color(hex: 0xF3F4F6), in: Capsule())
@@ -352,8 +389,13 @@ struct FloatingChatContent: View {
                 .textFieldStyle(.plain).lineLimit(1...4).font(.callout)
                 .foregroundStyle(Color(hex: 0x111827))
                 .padding(.horizontal, 10).padding(.vertical, 7)
-                .background(Color(hex: 0xF3F4F6), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Color(hex: 0xE5E7EB), lineWidth: 1))
+                .background(
+                    Color(hex: 0xF3F4F6), in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(
+                        Color(hex: 0xE5E7EB), lineWidth: 1)
+                )
                 .onSubmit { triggerSend() }
             Button(action: triggerSend) {
                 Image(systemName: "arrow.up.circle.fill").font(.title2)
@@ -364,12 +406,18 @@ struct FloatingChatContent: View {
         .padding(10).background(Color.white)
     }
 
-    private var canSend: Bool { !inputPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isAnalyzing }
+    private var canSend: Bool {
+        !inputPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isAnalyzing
+    }
 
     private func triggerSend() {
         let trimmed = inputPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !isAnalyzing else { return }
-        if !GeminiService.hasAPIKey { pendingQuery = trimmed; showAPIKeySheet = true; return }
+        if !GeminiService.hasAPIKey {
+            pendingQuery = trimmed
+            showAPIKeySheet = true
+            return
+        }
         sendQuery(text: trimmed)
     }
 
@@ -381,33 +429,39 @@ struct FloatingChatContent: View {
         model.addMessage(to: screenshot, role: .user, content: text)
         guard let data = screenshot.loadData(from: model.storeDirectory) else {
             currentError = .apiError(statusCode: 0, message: "Could not load screenshot data.")
-            isAnalyzing = false; return
+            isAnalyzing = false
+            return
         }
         Task {
             do {
                 let resp = try await GeminiService.generateAnalysis(imageData: data, query: text)
                 model.addMessage(to: screenshot, role: .assistant, content: resp)
                 lastFailedQuery = nil
-            } catch let e as GeminiError { currentError = e; if case .invalidAPIKey = e { showAPIKeySheet = true } }
-            catch { currentError = .apiError(statusCode: 0, message: error.localizedDescription) }
+            } catch let e as GeminiError {
+                currentError = e
+                if case .invalidAPIKey = e { showAPIKeySheet = true }
+            } catch { currentError = .apiError(statusCode: 0, message: error.localizedDescription) }
             isAnalyzing = false
         }
     }
 
     private func retryFailedQuery() {
         guard let query = lastFailedQuery, !isAnalyzing else { return }
-        currentError = nil; isAnalyzing = true
+        currentError = nil
+        isAnalyzing = true
         guard let data = screenshot.loadData(from: model.storeDirectory) else {
             currentError = .apiError(statusCode: 0, message: "Could not load screenshot data.")
-            isAnalyzing = false; return
+            isAnalyzing = false
+            return
         }
         Task {
             do {
                 let resp = try await GeminiService.generateAnalysis(imageData: data, query: query)
                 model.addMessage(to: screenshot, role: .assistant, content: resp)
                 lastFailedQuery = nil
-            } catch let e as GeminiError { currentError = e }
-            catch { currentError = .apiError(statusCode: 0, message: error.localizedDescription) }
+            } catch let e as GeminiError { currentError = e } catch {
+                currentError = .apiError(statusCode: 0, message: error.localizedDescription)
+            }
             isAnalyzing = false
         }
     }
