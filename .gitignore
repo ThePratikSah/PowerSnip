@@ -3,6 +3,9 @@
 DerivedData/
 *.xcodeproj/
 xcuserdata/
+dist/
+*.dmg
+*.zip
 .DS_Store
 .env*
 /shots/

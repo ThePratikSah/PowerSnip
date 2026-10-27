@@ -43,15 +43,12 @@ rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$bin" "$app/Contents/MacOS/$name"
 sed -e "s/__BUILD__/$(date +%Y%m%d%H%M)/" "$here/Info.plist.in" > "$app/Contents/Info.plist"
-# The icon: Icon/AppIcon.icon -> Resources/Assets.car + AppIcon.icns, rebuilt when it changed.
-if [[ -d "$here/Icon/AppIcon.icon" ]]; then
-  car="$here/Resources/Assets.car"
-  if [[ ! -f "$car" || -n "$(find "$here/Icon/AppIcon.icon" -newer "$car" | head -1)" ]]; then
-    "$here/tools/make_icon.sh"
-  fi
-  [[ -f "$car" ]] && cp -X "$car" "$app/Contents/Resources/" 2>/dev/null || true
-  [[ -f "$here/Resources/AppIcon.icns" ]] && cp "$here/Resources/AppIcon.icns" "$app/Contents/Resources/" 2>/dev/null || true
+# The icon: compile from Assets.xcassets or Resources/AppIcon.icns into app bundle
+if [[ ! -f "$here/Resources/AppIcon.icns" || -n "$(find "$here/Assets.xcassets" -newer "$here/Resources/AppIcon.icns" 2>/dev/null | head -1)" ]]; then
+  "$here/tools/make_icon.sh"
 fi
+[[ -f "$here/Resources/AppIcon.icns" ]] && cp "$here/Resources/AppIcon.icns" "$app/Contents/Resources/" 2>/dev/null || true
+[[ -f "$here/Resources/Assets.car" ]] && cp -X "$here/Resources/Assets.car" "$app/Contents/Resources/" 2>/dev/null || true
 xattr -cr "$app"
 codesign --force --sign "$identity" "$app" 2>&1 | grep -v "replacing existing signature" || true
 echo "installed $app (signed: ${identity})"

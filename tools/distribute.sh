@@ -1,0 +1,66 @@
+#!/bin/zsh
+# Builds, packages, and prepares Snip for macOS distribution (DMG & Zip).
+#
+# Usage:
+#   tools/distribute.sh
+#   SIGN_IDENTITY="Developer ID Application: Your Name (TEAM_ID)" tools/distribute.sh
+set -euo pipefail
+
+here=${0:A:h}
+repo=${here:h}
+dist="$repo/dist"
+app="$HOME/Applications/Snip.app"
+
+echo "==> 1. Building release app bundle with new icon..."
+"$repo/build.sh"
+
+echo "==> 2. Preparing distribution output directory..."
+rm -rf "$dist"
+mkdir -p "$dist"
+
+# Sign with hardened runtime if Developer ID is present
+identity="${SIGN_IDENTITY:-}"
+if [[ -n "$identity" && "$identity" != "-" ]]; then
+  echo "==> Signing with hardened runtime using identity: $identity"
+  codesign --force --deep --options runtime --timestamp --sign "$identity" "$app"
+  codesign --verify --deep --strict --verbose=2 "$app"
+fi
+
+echo "==> 3. Creating standalone Zip archive..."
+# ditto preserves resource forks and HFS metadata for macOS apps
+ditto -c -k --keepParent "$app" "$dist/Snip-macOS.zip"
+echo "Created: dist/Snip-macOS.zip"
+
+echo "==> 4. Creating Drag-and-Drop DMG Installer..."
+dmg_root=$(mktemp -d)
+trap 'rm -rf "$dmg_root"' EXIT
+
+cp -R "$app" "$dmg_root/"
+ln -s /Applications "$dmg_root/Applications"
+
+dmg_path="$dist/Snip-Installer.dmg"
+rm -f "$dmg_path"
+hdiutil create -volname "Snip" -srcfolder "$dmg_root" -ov -format UDZO "$dmg_path" >/dev/null
+echo "Created: dist/Snip-Installer.dmg"
+
+# Sign DMG if identity provided
+if [[ -n "$identity" && "$identity" != "-" ]]; then
+  codesign --force --sign "$identity" "$dmg_path"
+fi
+
+echo ""
+echo "======================================================="
+echo " Distribution artifacts ready in: $dist"
+echo "   - $dist/Snip-Installer.dmg"
+echo "   - $dist/Snip-macOS.zip"
+echo "======================================================="
+echo ""
+echo "Next Steps for Public Distribution (Apple Gatekeeper / Notarization):"
+echo "  xcrun notarytool submit \"$dist/Snip-Installer.dmg\" \\"
+echo "    --apple-id \"developer@example.com\" \\"
+echo "    --team-id \"TEAM_ID\" \\"
+echo "    --password \"app-specific-password\" \\"
+echo "    --wait"
+echo ""
+echo "  xcrun stapler staple \"$dist/Snip-Installer.dmg\""
+echo "======================================================="
