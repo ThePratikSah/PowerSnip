@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 import Observation
-import AiPowerSnipKit
+import SnipKit
 
 /// A single message exchanged in the screenshot chat.
 public struct ChatMessage: Identifiable, Codable, Equatable, Sendable {

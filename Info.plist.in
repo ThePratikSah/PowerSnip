@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-<key>CFBundleIdentifier</key><string>com.pratik.aipowersnip</string>
-<key>CFBundleName</key><string>AiPowerSnip</string>
-<key>CFBundleDisplayName</key><string>AiPowerSnip</string>
-<key>CFBundleExecutable</key><string>AiPowerSnip</string>
+<key>CFBundleIdentifier</key><string>com.pratik.snip</string>
+<key>CFBundleName</key><string>Snip</string>
+<key>CFBundleDisplayName</key><string>Snip</string>
+<key>CFBundleExecutable</key><string>Snip</string>
 <key>CFBundleIconFile</key><string>AppIcon</string>
 <key>CFBundleIconName</key><string>AppIcon</string>
 <key>CFBundlePackageType</key><string>APPL</string>

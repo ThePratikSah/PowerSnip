@@ -1,5 +1,5 @@
 import Testing
-@testable import AiPowerSnipKit
+@testable import SnipKit
 
 @Test("Clean titles", arguments: [
     ("Buy milk", "Buy milk"),

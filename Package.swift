@@ -2,17 +2,17 @@
 import PackageDescription
 
 let package = Package(
-    name: "AiPowerSnip",
+    name: "Snip",
     platforms: [.macOS(.v15)],
     targets: [
         // Rules and data logic with no SwiftUI, so tests run without the app.
-        .target(name: "AiPowerSnipKit"),
+        .target(name: "SnipKit"),
         .executableTarget(
-            name: "AiPowerSnip",
-            dependencies: ["AiPowerSnipKit"],
+            name: "Snip",
+            dependencies: ["SnipKit"],
             // App code runs on the main thread unless you say otherwise.
             swiftSettings: [.defaultIsolation(MainActor.self)]
         ),
-        .testTarget(name: "AiPowerSnipKitTests", dependencies: ["AiPowerSnipKit"]),
+        .testTarget(name: "SnipKitTests", dependencies: ["SnipKit"]),
     ]
 )

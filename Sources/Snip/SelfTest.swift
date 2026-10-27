@@ -1,10 +1,10 @@
 import AppKit
 import Foundation
-import AiPowerSnipKit
+import SnipKit
 
 /// Self-test for agents: runs the app's real functions on a test store,
 /// prints PASS or FAIL per check, and quits with exit code 0 or 1.
-///   APP_STORE=/tmp/AiPowerSnip-self-store ~/Applications/AiPowerSnip.app/Contents/MacOS/AiPowerSnip --selftest
+///   APP_STORE=/tmp/Snip-self-store ~/Applications/Snip.app/Contents/MacOS/Snip --selftest
 @MainActor
 enum SelfTest {
     static var requested: Bool { CommandLine.arguments.contains("--selftest") }
