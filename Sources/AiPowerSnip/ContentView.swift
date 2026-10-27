@@ -45,19 +45,33 @@ struct ScreenshotListView: View {
                 ContentUnavailableView(
                     "No Screenshots",
                     systemImage: "camera.viewfinder",
-                    description: Text("Press ⇧⌘N to capture your screen.")
+                    description: Text("Press ⇧⌘N to select and snip any section of the screen.")
                 )
             }
         }
         .navigationTitle("Screenshots")
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button(action: {
-                    Task { await ScreenCapture.capture(model: model) }
-                }) {
-                    Label("Capture", systemImage: "camera.viewfinder")
+            ToolbarItemGroup(placement: .primaryAction) {
+                Menu {
+                    Button(action: {
+                        Task { await ScreenCapture.captureSelection(model: model) }
+                    }) {
+                        Label("Snip Section (Drag Area)", systemImage: "crop")
+                    }
+                    .keyboardShortcut("n", modifiers: [.command, .shift])
+
+                    Button(action: {
+                        Task { await ScreenCapture.captureFullScreen(model: model) }
+                    }) {
+                        Label("Capture Full Screen", systemImage: "macwindow")
+                    }
+                    .keyboardShortcut("3", modifiers: [.command, .shift])
+                } label: {
+                    Label("Snip Section", systemImage: "camera.viewfinder")
+                } primaryAction: {
+                    Task { await ScreenCapture.captureSelection(model: model) }
                 }
-                .help("Capture screenshot (⇧⌘N)")
+                .help("Snip a section of the screen (⇧⌘N)")
                 .disabled(model.isCapturing)
             }
         }

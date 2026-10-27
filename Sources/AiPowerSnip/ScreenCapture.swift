@@ -1,80 +1,72 @@
 import AppKit
-import ScreenCaptureKit
 
-/// Captures screenshots cleanly on macOS.
+/// Captures screenshots cleanly on macOS, supporting interactive area selection and full screen.
 enum ScreenCapture {
-    /// Captures the main screen, hiding the app during capture if needed.
-    static func capture(model: AppModel) async {
+    /// Captures a selected section of the screen interactively using crosshairs.
+    /// User can drag to select any region, hit Space to select a specific window, or Escape to cancel.
+    static func captureSelection(model: AppModel) async {
+        await executeCapture(mode: .interactive, model: model)
+    }
+
+    /// Captures the full primary screen.
+    static func captureFullScreen(model: AppModel) async {
+        await executeCapture(mode: .fullScreen, model: model)
+    }
+
+    private enum Mode {
+        case interactive
+        case fullScreen
+    }
+
+    private static func executeCapture(mode: Mode, model: AppModel) async {
         model.isCapturing = true
         defer { model.isCapturing = false }
 
-        // Hide app briefly so it does not appear in the shot
+        // Hide app so it does not block what the user wants to snip
         NSApp.hide(nil)
-        try? await Task.sleep(for: .milliseconds(400))
+        try? await Task.sleep(for: .milliseconds(300))
 
-        var capturedData: Data? = nil
+        let tempFile = FileManager.default.temporaryDirectory.appendingPathComponent("snip_\(UUID().uuidString).png")
 
-        // Method 1: ScreenCaptureKit
-        if #available(macOS 14.0, *) {
-            capturedData = await captureViaScreenCaptureKit()
-        }
+        // Run screencapture process off the main thread so UI doesn't hang
+        let capturedData: Data? = await Task.detached(priority: .userInitiated) {
+            let proc = Process()
+            proc.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
 
-        // Method 2: screencapture CLI fallback (guaranteed on all macOS)
-        if capturedData == nil {
-            capturedData = captureViaCLI()
-        }
+            switch mode {
+            case .interactive:
+                // -i: capture screen interactively by mouse selection
+                // -x: do not play camera shutter sound
+                proc.arguments = ["-i", "-x", tempFile.path]
+            case .fullScreen:
+                // -m: only capture main monitor
+                // -x: do not play sound
+                proc.arguments = ["-m", "-x", tempFile.path]
+            }
 
-        // Restore app
+            do {
+                try proc.run()
+                proc.waitUntilExit()
+
+                if FileManager.default.fileExists(atPath: tempFile.path) {
+                    let data = try? Data(contentsOf: tempFile)
+                    try? FileManager.default.removeItem(at: tempFile)
+                    return data
+                }
+            } catch {
+                print("Failed to run screencapture: \(error)")
+            }
+            return nil
+        }.value
+
+        // Restore and activate app
         NSApp.unhideWithoutActivation()
         NSApp.activate()
 
-        if let data = capturedData {
-            model.addScreenshot(imageData: data)
-        } else {
-            print("Failed to capture screenshot")
+        if let data = capturedData, !data.isEmpty {
+            let titlePrefix = (mode == .interactive) ? "Snip" : "Screen"
+            let title = "\(titlePrefix) \(DateFormatter.shortFormat.string(from: .now))"
+            model.addScreenshot(imageData: data, title: title)
         }
-    }
-
-    @available(macOS 14.0, *)
-    private static func captureViaScreenCaptureKit() async -> Data? {
-        do {
-            let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-            guard let display = content.displays.first else { return nil }
-
-            let appBundleID = Bundle.main.bundleIdentifier ?? ""
-            let excludedWindows = content.windows.filter { $0.owningApplication?.bundleIdentifier == appBundleID }
-            let filter = SCContentFilter(display: display, excludingWindows: excludedWindows)
-
-            let config = SCStreamConfiguration()
-            let scale = NSScreen.main?.backingScaleFactor ?? 2.0
-            config.width = Int(display.frame.width * scale)
-            config.height = Int(display.frame.height * scale)
-            config.showsCursor = false
-
-            let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
-            return pngData(from: image)
-        } catch {
-            print("ScreenCaptureKit error: \(error)")
-            return nil
-        }
-    }
-
-    private static func captureViaCLI() -> Data? {
-        let tempFile = FileManager.default.temporaryDirectory.appendingPathComponent("snip_\(UUID().uuidString).png")
-        let proc = Process()
-        proc.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
-        proc.arguments = ["-x", "-m", tempFile.path]
-        try? proc.run()
-        proc.waitUntilExit()
-
-        guard FileManager.default.fileExists(atPath: tempFile.path) else { return nil }
-        let data = try? Data(contentsOf: tempFile)
-        try? FileManager.default.removeItem(at: tempFile)
-        return data
-    }
-
-    private static func pngData(from cgImage: CGImage) -> Data? {
-        let rep = NSBitmapImageRep(cgImage: cgImage)
-        return rep.representation(using: .png, properties: [:])
     }
 }

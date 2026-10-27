@@ -29,10 +29,15 @@ struct AiPowerSnipApp: App {
             SidebarCommands()
             ToolbarCommands()
             CommandGroup(replacing: .newItem) {
-                Button("Capture Screenshot") {
-                    Task { await ScreenCapture.capture(model: model) }
+                Button("Snip Section…") {
+                    Task { await ScreenCapture.captureSelection(model: model) }
                 }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
+
+                Button("Capture Full Screen") {
+                    Task { await ScreenCapture.captureFullScreen(model: model) }
+                }
+                .keyboardShortcut("3", modifiers: [.command, .shift])
             }
         }
 
