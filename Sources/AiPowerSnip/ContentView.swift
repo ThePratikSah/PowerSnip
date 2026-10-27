@@ -10,6 +10,7 @@ struct ContentView: View {
         } detail: {
             ScreenshotDetailView()
         }
+        .navigationSplitViewStyle(.balanced)
         .task {
             SeedData.insertIfRequested(into: model)
             SelfTest.runIfRequested(model: model)
@@ -20,7 +21,7 @@ struct ContentView: View {
     private var sidebar: some View {
         @Bindable var model = model
         return ScreenshotListView()
-            .navigationSplitViewColumnWidth(min: 220, ideal: 260)
+            .navigationSplitViewColumnWidth(min: 240, ideal: 270, max: 360)
     }
 }
 
@@ -40,12 +41,13 @@ struct ScreenshotListView: View {
                     }
                 }
         }
+        .listStyle(.sidebar)
         .overlay {
             if model.screenshots.isEmpty {
                 ContentUnavailableView(
                     "No Screenshots",
                     systemImage: "camera.viewfinder",
-                    description: Text("Press ⌥⇧⌘4 to select and snip any section of the screen.")
+                    description: Text("Press ⌥⇧⌘4 or ⇧⌘4 to snip any section of the screen.")
                 )
             }
         }
@@ -56,14 +58,14 @@ struct ScreenshotListView: View {
                     Button(action: {
                         Task { await ScreenCapture.captureSelection(model: model) }
                     }) {
-                        Label("Snip Section (Drag Area)", systemImage: "crop")
+                        Label("Snip Section (⌥⇧⌘4 / ⇧⌘4)", systemImage: "crop")
                     }
                     .keyboardShortcut("4", modifiers: [.command, .option, .shift])
 
                     Button(action: {
                         Task { await ScreenCapture.captureFullScreen(model: model) }
                     }) {
-                        Label("Capture Full Screen", systemImage: "macwindow")
+                        Label("Capture Full Screen (⇧⌘3)", systemImage: "macwindow")
                     }
                     .keyboardShortcut("3", modifiers: [.command, .shift])
                 } label: {
@@ -71,7 +73,7 @@ struct ScreenshotListView: View {
                 } primaryAction: {
                     Task { await ScreenCapture.captureSelection(model: model) }
                 }
-                .help("Snip a section of the screen (⌥⇧⌘4)")
+                .help("Snip a section of the screen (⌥⇧⌘4 / ⇧⌘4)")
                 .disabled(model.isCapturing)
             }
         }
@@ -83,18 +85,21 @@ struct ScreenshotRowView: View {
     let screenshot: Screenshot
 
     var body: some View {
-        HStack(spacing: Space.sm) {
+        HStack(spacing: 10) {
             if let image = screenshot.loadImage(from: model.storeDirectory) {
                 Image(nsImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-                    .frame(width: 52, height: 36)
+                    .frame(width: 48, height: 34)
                     .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).stroke(Color.primary.opacity(0.1), lineWidth: 1))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                    )
             } else {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(Color.secondary.opacity(0.2))
-                    .frame(width: 52, height: 36)
+                    .fill(Color.secondary.opacity(0.15))
+                    .frame(width: 48, height: 34)
                     .overlay(Image(systemName: "photo").foregroundStyle(.secondary))
             }
 
@@ -114,7 +119,7 @@ struct ScreenshotRowView: View {
                 .foregroundStyle(.secondary)
             }
         }
-        .padding(.vertical, Space.xs)
+        .padding(.vertical, 3)
     }
 }
 
@@ -130,7 +135,7 @@ struct ScreenshotDetailView: View {
             ContentUnavailableView(
                 "No Screenshot Selected",
                 systemImage: "photo.badge.plus",
-                description: Text("Capture a new screenshot or select one from the sidebar.")
+                description: Text("Press ⌥⇧⌘4 to snip a section of your screen.")
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -151,7 +156,7 @@ struct ActiveScreenshotCanvas: View {
             // Small AI Analysis Chat Overlay Box
             if isChatVisible {
                 ChatOverlayBox(screenshot: screenshot)
-                    .frame(width: 380, height: 480)
+                    .frame(width: 420, height: 520)
                     .padding(Space.lg)
                     .transition(.asymmetric(
                         insertion: .scale(scale: 0.95).combined(with: .opacity),
@@ -188,11 +193,20 @@ struct ActiveScreenshotCanvas: View {
         GeometryReader { proxy in
             if let image = screenshot.loadImage(from: model.storeDirectory) {
                 ScrollView([.horizontal, .vertical]) {
-                    Image(nsImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(minWidth: proxy.size.width, minHeight: proxy.size.height)
-                        .padding(Space.md)
+                    VStack {
+                        Spacer(minLength: 0)
+                        HStack {
+                            Spacer(minLength: 0)
+                            Image(nsImage: image)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .shadow(color: Color.black.opacity(0.12), radius: 10, y: 4)
+                                .padding(Space.lg)
+                            Spacer(minLength: 0)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .frame(minWidth: proxy.size.width, minHeight: proxy.size.height)
                 }
             } else {
                 ContentUnavailableView(
@@ -240,7 +254,7 @@ struct ChatOverlayBox: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(Color.primary.opacity(0.12), lineWidth: 1)
         )
-        .shadow(color: Color.black.opacity(0.18), radius: 16, x: 0, y: 6)
+        .shadow(color: Color.black.opacity(0.20), radius: 20, x: 0, y: 8)
     }
 
     private var chatHeader: some View {
@@ -249,7 +263,7 @@ struct ChatOverlayBox: View {
                 .font(.headline)
                 .foregroundStyle(Palette.accent)
 
-            VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 1) {
                 Text("AI Snip Assistant")
                     .font(.subheadline.weight(.semibold))
                 Text("Ask anything about this screenshot")
@@ -271,15 +285,15 @@ struct ChatOverlayBox: View {
                 .help("Clear conversation")
             }
         }
-        .padding(.horizontal, Space.md)
-        .padding(.vertical, Space.sm)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
         .background(Color.primary.opacity(0.03))
     }
 
     private var chatHistory: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: Space.sm) {
+                LazyVStack(alignment: .leading, spacing: 12) {
                     if screenshot.messages.isEmpty {
                         emptyPromptView
                     } else {
@@ -290,30 +304,30 @@ struct ChatOverlayBox: View {
                     }
 
                     if isAnalyzing {
-                        HStack(spacing: Space.sm) {
+                        HStack(spacing: 8) {
                             ProgressView()
                                 .controlSize(.small)
-                            Text("Querying `/analyse`…")
+                            Text("Analyzing screenshot with `/analyse`…")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
-                        .padding(.horizontal, Space.md)
-                        .padding(.vertical, Space.xs)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 6)
                         .id("analyzing_spinner")
                     }
 
                     if let error = errorText {
-                        HStack(spacing: Space.xs) {
-                            Image(systemName: "exclamationmark.circle.fill")
-                                .foregroundStyle(.red)
+                        HStack(spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange)
                             Text(error)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
-                        .padding(.horizontal, Space.md)
+                        .padding(.horizontal, 14)
                     }
                 }
-                .padding(Space.sm)
+                .padding(12)
             }
             .onChange(of: screenshot.messages.count) {
                 if let lastID = screenshot.messages.last?.id {
@@ -329,35 +343,35 @@ struct ChatOverlayBox: View {
     }
 
     private var emptyPromptView: some View {
-        VStack(spacing: Space.sm) {
+        VStack(spacing: 8) {
             Image(systemName: "text.magnifyingglass")
                 .font(.system(size: 32))
                 .foregroundStyle(.secondary.opacity(0.6))
-                .padding(.top, Space.md)
+                .padding(.top, 12)
 
             Text("What would you like to know?")
                 .font(.callout.weight(.medium))
 
-            Text("Type any question below or choose a suggestion to send to /analyse.")
+            Text("Type any question below or pick a suggestion to analyze this screen.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, Space.md)
+                .padding(.horizontal, 16)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, Space.lg)
+        .padding(.vertical, 20)
     }
 
     private var suggestionChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: Space.xs) {
-                suggestionButton("Explain this screen")
+            HStack(spacing: 6) {
                 suggestionButton("Summarize text")
-                suggestionButton("Find UI errors")
-                suggestionButton("List key data")
+                suggestionButton("Explain UI layout")
+                suggestionButton("Find bugs or issues")
+                suggestionButton("Extract key data")
             }
-            .padding(.horizontal, Space.sm)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
         }
         .background(Color.primary.opacity(0.02))
     }
@@ -369,33 +383,33 @@ struct ChatOverlayBox: View {
         }) {
             Text(text)
                 .font(.caption2.weight(.medium))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color.primary.opacity(0.06), in: Capsule())
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Color.primary.opacity(0.07), in: Capsule())
         }
         .buttonStyle(.plain)
     }
 
     private var chatInputBar: some View {
-        HStack(spacing: Space.xs) {
+        HStack(spacing: 8) {
             TextField("Ask about screenshot…", text: $inputPrompt, axis: .vertical)
                 .textFieldStyle(.plain)
                 .lineLimit(1...4)
-                .padding(.horizontal, Space.sm)
-                .padding(.vertical, 6)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
                 .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .onSubmit { sendQuery() }
 
             Button(action: sendQuery) {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.title2)
-                    .foregroundStyle(canSend ? Palette.accent : Color.secondary.opacity(0.4))
+                    .foregroundStyle(canSend ? Palette.accent : Color.secondary.opacity(0.35))
             }
             .buttonStyle(.plain)
             .disabled(!canSend)
             .keyboardShortcut(.return, modifiers: [])
         }
-        .padding(Space.sm)
+        .padding(10)
     }
 
     private var canSend: Bool {
@@ -439,26 +453,32 @@ struct ChatMessageBubble: View {
     let message: ChatMessage
 
     var body: some View {
-        HStack(alignment: .top, spacing: Space.xs) {
+        HStack(alignment: .top, spacing: 8) {
             if message.role == .user {
-                Spacer(minLength: 32)
+                Spacer(minLength: 40)
             }
 
-            VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 4) {
                 if message.role == .assistant {
                     MarkdownRendererView(markdown: message.content)
                 } else {
                     Text(message.content)
                         .font(.callout)
                         .foregroundStyle(Palette.onAccent)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .padding(.horizontal, Space.md)
-            .padding(.vertical, Space.sm)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
             .background(bubbleBackground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(borderColor, lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(message.role == .assistant ? 0.05 : 0.0), radius: 3, y: 1)
 
             if message.role == .assistant {
-                Spacer(minLength: 24)
+                Spacer(minLength: 16)
             }
         }
     }
@@ -470,34 +490,12 @@ struct ChatMessageBubble: View {
             return AnyShapeStyle(Color(nsColor: .controlBackgroundColor))
         }
     }
-}
 
-// MARK: - Markdown Renderer
-
-struct MarkdownRendererView: View {
-    let markdown: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Space.xs) {
-            if let attributed = parseMarkdown(markdown) {
-                Text(attributed)
-                    .font(.callout)
-                    .textSelection(.enabled)
-            } else {
-                Text(markdown)
-                    .font(.callout)
-                    .textSelection(.enabled)
-            }
-        }
-    }
-
-    private func parseMarkdown(_ text: String) -> AttributedString? {
-        do {
-            var options = AttributedString.MarkdownParsingOptions()
-            options.interpretedSyntax = .full
-            return try AttributedString(markdown: text, options: options)
-        } catch {
-            return nil
+    private var borderColor: Color {
+        if message.role == .user {
+            return Color.clear
+        } else {
+            return Color.primary.opacity(0.08)
         }
     }
 }

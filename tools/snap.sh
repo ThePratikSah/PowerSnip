@@ -4,11 +4,12 @@
 #        APP_SNAPSHOT_PAGES=all,settings tools/snap.sh
 set -u
 app=~/Applications/AiPowerSnip.app/Contents/MacOS/AiPowerSnip
-store=/tmp/AiPowerSnip-test.store
+store=/tmp/AiPowerSnip-test-store
 shots=/tmp/AiPowerSnip-shots
 # A crashed run leaves saved window state, and the next launch would wait on a "reopen windows?" alert.
 rm -rf ~/Library/Saved\ Application\ State/com.pratik.aipowersnip.savedState
 # Seed data only fills an empty store, so start from nothing.
-rm -f $store $store-shm $store-wal
+rm -rf "$store"
+mkdir -p "$store"
 rm -rf $shots
 APP_STORE=$store APP_SEED=1 APP_SNAPSHOT=$shots $app

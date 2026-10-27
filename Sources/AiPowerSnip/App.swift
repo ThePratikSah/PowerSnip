@@ -21,9 +21,9 @@ struct AiPowerSnipApp: App {
                 .environment(model)
                 .themed()
                 .overlay { if GridOverlay.enabled { GridOverlay() } }
-                .frame(minWidth: 860, minHeight: 540)
+                .frame(minWidth: 900, minHeight: 560)
         }
-        .defaultSize(width: 1160, height: 740)
+        .defaultSize(width: 1180, height: 750)
         .windowToolbarStyle(.unified)
         .commands {
             SidebarCommands()
@@ -37,8 +37,34 @@ struct AiPowerSnipApp: App {
                 Button("Capture Full Screen") {
                     Task { await ScreenCapture.captureFullScreen(model: model) }
                 }
-                .keyboardShortcut("3", modifiers: [.command, .option, .shift])
+                .keyboardShortcut("3", modifiers: [.command, .shift])
             }
+        }
+
+        // Keep running in menu bar as a background utility
+        MenuBarExtra("AiPowerSnip", systemImage: "camera.viewfinder") {
+            Button("Snip Section (⌥⇧⌘4)") {
+                Task { await ScreenCapture.captureSelection(model: model) }
+            }
+            .keyboardShortcut("4", modifiers: [.command, .option, .shift])
+
+            Button("Capture Full Screen (⇧⌘3)") {
+                Task { await ScreenCapture.captureFullScreen(model: model) }
+            }
+            .keyboardShortcut("3", modifiers: [.command, .shift])
+
+            Divider()
+
+            Button("Open AiPowerSnip Window") {
+                AppDelegate.showMainWindow()
+            }
+
+            Divider()
+
+            Button("Quit AiPowerSnip") {
+                NSApp.terminate(nil)
+            }
+            .keyboardShortcut("q", modifiers: [.command])
         }
 
         Settings {
@@ -50,22 +76,62 @@ struct AiPowerSnipApp: App {
     }
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
+    private var mainWindow: NSWindow?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate()
 
-        // Register system-wide global hotkey Cmd + Option + Shift + 4
+        // Hook main window to prevent deallocation on close
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            if let window = NSApp.windows.first(where: { $0.canBecomeMain && !$0.isSheet }) {
+                self?.mainWindow = window
+                window.delegate = self
+            }
+        }
+
+        // Register system-wide global hotkeys (Cmd+Opt+Shift+4 and Cmd+Shift+4)
         GlobalHotKeyManager.shared.register {
             Task { @MainActor in
                 if let model = AppModel.shared {
                     await ScreenCapture.captureSelection(model: model)
+                    Self.showMainWindow()
                 }
             }
         }
     }
 
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+    /// Keep app running in background when window is closed
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
+    }
+
+    /// Reopen window when clicking Dock icon
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        Self.showMainWindow()
+        return true
+    }
+
+    /// Instead of destroying window on close, hide it so state is preserved
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        sender.orderOut(nil)
+        return false
+    }
+
+    /// Shows and activates the main window
+    static func showMainWindow() {
+        NSApp.unhideWithoutActivation()
+        NSApp.activate(ignoringOtherApps: true)
+        for window in NSApp.windows where !window.isSheet {
+            if window.canBecomeMain || window.title.contains("AiPowerSnip") || window.title.contains("Snip") {
+                window.makeKeyAndOrderFront(nil)
+                return
+            }
+        }
+        // Fallback to any window
+        NSApp.windows.first?.makeKeyAndOrderFront(nil)
+    }
 
     func applicationWillTerminate(_ notification: Notification) {
         if SelfTest.requested { exit(SelfTest.exitCode) }

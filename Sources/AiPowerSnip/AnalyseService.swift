@@ -88,8 +88,14 @@ enum AnalyseService {
         2. Verify it handles `POST /analyse` with fields:
            - `query` (form text)
            - `image` (PNG multipart file)
-        3. Respond with JSON: `{"response": "## Your Markdown..."}`
+        3. Respond with JSON:
+        ```json
+        {
+          "response": "## Your Markdown..."
+        }
+        ```
 
+        ---
         *Configure host and port anytime in **Settings → General**.*
         """
     }
