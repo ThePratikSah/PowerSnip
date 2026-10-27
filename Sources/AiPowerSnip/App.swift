@@ -20,6 +20,7 @@ struct AiPowerSnipApp: App {
             ContentView()
                 .environment(model)
                 .themed()
+                .protectFromScreenCapture(PrivacyProtectionManager.shared.isScreenCaptureBlocked)
                 .overlay { if GridOverlay.enabled { GridOverlay() } }
                 .frame(minWidth: 900, minHeight: 560)
         }
@@ -28,6 +29,13 @@ struct AiPowerSnipApp: App {
         .commands {
             SidebarCommands()
             ToolbarCommands()
+            CommandGroup(after: .appInfo) {
+                Toggle("Hide from Screen Share & Capture", isOn: Binding(
+                    get: { PrivacyProtectionManager.shared.isScreenCaptureBlocked },
+                    set: { PrivacyProtectionManager.shared.isScreenCaptureBlocked = $0 }
+                ))
+                .keyboardShortcut("P", modifiers: [.command, .option])
+            }
             CommandGroup(replacing: .newItem) {
                 Button("Snip Section…") {
                     Task { await ScreenCapture.captureSelection(model: model) }
@@ -82,6 +90,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate()
+
+        if SelfTest.requested {
+            SelfTest.runIfRequested(model: AppModel.shared ?? AppModel())
+            return
+        }
 
         // Hook main window to prevent deallocation on close
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in

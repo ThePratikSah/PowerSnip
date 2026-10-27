@@ -127,7 +127,18 @@ struct GeneralSettings: View {
         }
 
         Section("Storage & Privacy") {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle("Hide window during screen share & recordings", isOn: Binding(
+                    get: { PrivacyProtectionManager.shared.isScreenCaptureBlocked },
+                    set: { PrivacyProtectionManager.shared.isScreenCaptureBlocked = $0 }
+                ))
+
+                Text("Excludes AiPowerSnip from Zoom, Google Meet, Teams, Slack, QuickTime, and macOS screenshots (NSWindow.SharingType.none).")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+
+                Divider().padding(.vertical, 2)
+
                 Text("Chat and screenshot data are stored locally in:")
                     .font(.caption)
                     .foregroundStyle(.secondary)

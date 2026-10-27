@@ -82,6 +82,6 @@ enum SelfTest {
     static func finish(code: Int32) {
         exitCode = code
         for window in NSApp.windows { if let sheet = window.attachedSheet { window.endSheet(sheet) } }
-        NSApp.terminate(nil)
+        exit(code)
     }
 }
