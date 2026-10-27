@@ -1,0 +1,24 @@
+{
+  "configurations": [
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:AiPowerSnip}",
+      "name": "Debug Snip",
+      "target": "Snip",
+      "configuration": "debug",
+      "preLaunchTask": "swift: Build Debug Snip"
+    },
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:AiPowerSnip}",
+      "name": "Release Snip",
+      "target": "Snip",
+      "configuration": "release",
+      "preLaunchTask": "swift: Build Release Snip"
+    }
+  ]
+}
