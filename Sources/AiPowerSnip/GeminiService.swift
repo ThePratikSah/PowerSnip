@@ -1,6 +1,6 @@
 import Foundation
 
-/// Service for making multimodal requests and dynamic model discovery with the Google Gemini REST API.
+/// Service for making multimodal requests and discovering official active Google Gemini models.
 enum GeminiService {
     private static let apiKeyDefaultsKey = "gemini.apiKey"
     private static let modelDefaultsKey = "gemini.model"
@@ -8,7 +8,12 @@ enum GeminiService {
     /// The stored API key, saved locally in UserDefaults.
     static var apiKey: String {
         get { UserDefaults.standard.string(forKey: apiKeyDefaultsKey) ?? "" }
-        set { UserDefaults.standard.set(newValue.trimmingCharacters(in: .whitespacesAndNewlines), forKey: apiKeyDefaultsKey) }
+        set {
+            UserDefaults.standard.set(
+                newValue.trimmingCharacters(in: .whitespacesAndNewlines),
+                forKey: apiKeyDefaultsKey
+            )
+        }
     }
 
     /// True if an API key is currently saved.
@@ -22,13 +27,42 @@ enum GeminiService {
         set { UserDefaults.standard.set(newValue, forKey: modelDefaultsKey) }
     }
 
-    static var defaultModels: [String] {
+    /// Curated list of current, official, non-deprecated Google Gemini multimodal models.
+    static var officialModels: [ModelInfo] {
         [
-            "gemini-2.5-flash",
-            "gemini-2.0-flash",
-            "gemini-1.5-flash",
-            "gemini-1.5-pro"
+            ModelInfo(
+                name: "models/gemini-2.5-flash",
+                displayName: "Gemini 2.5 Flash (Recommended)",
+                description: "Latest fast multimodal model with superior speed and multimodal reasoning.",
+                inputTokenLimit: 1_048_576,
+                outputTokenLimit: 8_192
+            ),
+            ModelInfo(
+                name: "models/gemini-2.0-flash",
+                displayName: "Gemini 2.0 Flash",
+                description: "Second-generation multimodal model with ultra-low latency.",
+                inputTokenLimit: 1_048_576,
+                outputTokenLimit: 8_192
+            ),
+            ModelInfo(
+                name: "models/gemini-1.5-pro",
+                displayName: "Gemini 1.5 Pro",
+                description: "Advanced reasoning model for complex visual inspection and deep analysis.",
+                inputTokenLimit: 2_097_152,
+                outputTokenLimit: 8_192
+            ),
+            ModelInfo(
+                name: "models/gemini-1.5-flash",
+                displayName: "Gemini 1.5 Flash",
+                description: "Lightweight and efficient production multimodal model.",
+                inputTokenLimit: 1_048_576,
+                outputTokenLimit: 8_192
+            )
         ]
+    }
+
+    static var defaultModels: [String] {
+        officialModels.map(\.shortName)
     }
 
     static var availableModels: [String] {
@@ -49,15 +83,17 @@ enum GeminiService {
         }
     }
 
-    /// Discovers active multimodal models from the Gemini API.
-    static func getMultimodalModels(useHeaderAuth: Bool = false) async throws -> [ModelInfo] {
-        guard hasAPIKey else {
+    /// Discovers active, official, non-deprecated multimodal models from the Gemini API.
+    static func getMultimodalModels(
+        customApiKey: String? = nil,
+        useHeaderAuth: Bool = false
+    ) async throws -> [ModelInfo] {
+        let key = customApiKey?.trimmingCharacters(in: .whitespacesAndNewlines) ?? apiKey
+        guard !key.isEmpty else {
             throw GeminiError.missingAPIKey
         }
 
-        let key = apiKey
         var request: URLRequest
-
         if useHeaderAuth {
             guard let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models") else {
                 throw GeminiError.invalidURL
@@ -73,7 +109,7 @@ enum GeminiService {
         }
 
         request.httpMethod = "GET"
-        request.timeoutInterval = 30
+        request.timeoutInterval = 20
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -87,39 +123,85 @@ enum GeminiService {
 
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let modelsArray = json["models"] as? [[String: Any]] else {
-            return []
+            return officialModels
         }
 
-        let excluded = ["embedding", "embed", "aqa", "imagen", "veo", "learnlm", "chirp", "music"]
+        // Keywords indicating deprecated, embedding, or non-multimodal models
+        let excludedKeywords = [
+            "deprecated",
+            "discontinued",
+            "legacy",
+            "1.0",
+            "pro-vision",
+            "embedding",
+            "embed",
+            "aqa",
+            "imagen",
+            "veo",
+            "learnlm",
+            "chirp",
+            "music",
+            "bison",
+            "gecko",
+            "tuned",
+            "experimental",
+            "preview-0"
+        ]
 
-        var filtered: [ModelInfo] = []
+        var discovered: [ModelInfo] = []
         for m in modelsArray {
             let name = (m["name"] as? String) ?? ""
+            let displayName = (m["displayName"] as? String) ?? name
+            let description = (m["description"] as? String) ?? ""
             let methods = (m["supportedGenerationMethods"] as? [String]) ?? []
 
             // 1. Must support generateContent
             guard methods.contains("generateContent") else { continue }
 
-            // 2. Must be a Gemini multimodal model
+            // 2. Must be a Gemini family model
             let nameLower = name.lowercased()
             guard nameLower.contains("gemini") else { continue }
 
-            // 3. Exclude embedding or non-text/image models
-            if excluded.contains(where: { nameLower.contains($0) }) { continue }
+            // 3. Exclude deprecated, obsolete, embedding, or specialized models
+            let combinedText = "\(nameLower) \(displayName.lowercased()) \(description.lowercased())"
+            let isExcluded = excludedKeywords.contains { combinedText.contains($0) }
+            guard !isExcluded else { continue }
 
-            filtered.append(
+            discovered.append(
                 ModelInfo(
                     name: name,
-                    displayName: (m["displayName"] as? String) ?? name,
-                    description: (m["description"] as? String) ?? "",
+                    displayName: displayName,
+                    description: description,
                     inputTokenLimit: m["inputTokenLimit"] as? Int,
                     outputTokenLimit: m["outputTokenLimit"] as? Int
                 )
             )
         }
 
-        filtered.sort { $0.name > $1.name }
-        return filtered
+        guard !discovered.isEmpty else {
+            return officialModels
+        }
+
+        // Sort so the latest official flash/pro versions are prioritized
+        discovered.sort { a, b in
+            let scoreA = modelPriorityScore(a.name)
+            let scoreB = modelPriorityScore(b.name)
+            if scoreA != scoreB {
+                return scoreA > scoreB
+            }
+            return a.name > b.name
+        }
+
+        return discovered
+    }
+
+    private static func modelPriorityScore(_ name: String) -> Int {
+        if name.contains("gemini-2.5-flash") { return 100 }
+        if name.contains("gemini-2.5-pro") { return 90 }
+        if name.contains("gemini-2.0-flash") { return 80 }
+        if name.contains("gemini-1.5-pro") { return 70 }
+        if name.contains("gemini-1.5-flash") { return 60 }
+        return 10
     }
 
     /// Calls the official Google Gemini generateContent API with image and query.

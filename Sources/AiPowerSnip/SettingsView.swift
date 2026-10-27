@@ -55,6 +55,8 @@ struct GeneralSettings: View {
     @AppStorage("gemini.model") private var selectedModel = "gemini-2.5-flash"
     @AppStorage("confirmDelete") private var confirmDelete = true
     @State private var showKey = false
+    @State private var models: [GeminiService.ModelInfo] = GeminiService.officialModels
+    @State private var isLoadingModels = false
 
     var body: some View {
         Section("Google Gemini API") {
@@ -76,11 +78,22 @@ struct GeneralSettings: View {
                     }
                     .buttonStyle(.plain)
                     .help(showKey ? "Hide API key" : "Show API key")
+
+                    Button(action: { Task { await refreshModels() } }) {
+                        if isLoadingModels {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .help("Fetch official models from Gemini API")
+                    .disabled(apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoadingModels)
                 }
 
-                Picker("Model", selection: $selectedModel) {
-                    ForEach(GeminiService.availableModels, id: \.self) { model in
-                        Text(model).tag(model)
+                Picker("Official Model", selection: $selectedModel) {
+                    ForEach(models) { m in
+                        Text(m.displayName).tag(m.shortName)
                     }
                 }
 
@@ -103,6 +116,11 @@ struct GeneralSettings: View {
                 }
             }
         }
+        .task {
+            if !apiKey.isEmpty {
+                await refreshModels()
+            }
+        }
 
         Section("Screenshots") {
             Toggle("Ask before deleting screenshots", isOn: $confirmDelete)
@@ -118,5 +136,20 @@ struct GeneralSettings: View {
                     .foregroundStyle(.primary)
             }
         }
+    }
+
+    private func refreshModels() async {
+        let trimmed = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        isLoadingModels = true
+        do {
+            let discovered = try await GeminiService.getMultimodalModels(customApiKey: trimmed)
+            if !discovered.isEmpty {
+                models = discovered
+            }
+        } catch {
+            // Keep existing or fallback
+        }
+        isLoadingModels = false
     }
 }
