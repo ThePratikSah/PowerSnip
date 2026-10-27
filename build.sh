@@ -21,6 +21,11 @@ if [[ -z "$identity" ]]; then
 fi
 [[ -n "$identity" ]] || identity=-
 
+# Set SDK to 26.5 if available (CommandLineTools compatibility)
+if [[ -d "/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk" ]]; then
+  export SDKROOT="/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk"
+fi
+
 swift build -c $config --package-path "$here" --scratch-path "$scratch" 2>&1 | grep -E "error|warning|Build complete" | grep -v "^\[" || true
 bin="$scratch/$config/$name"
 [[ -x "$bin" ]] || { echo "build failed"; exit 1; }
@@ -44,7 +49,8 @@ if [[ -d "$here/Icon/AppIcon.icon" ]]; then
   if [[ ! -f "$car" || -n "$(find "$here/Icon/AppIcon.icon" -newer "$car" | head -1)" ]]; then
     "$here/tools/make_icon.sh"
   fi
-  cp -X "$car" "$here/Resources/AppIcon.icns" "$app/Contents/Resources/"
+  [[ -f "$car" ]] && cp -X "$car" "$app/Contents/Resources/" 2>/dev/null || true
+  [[ -f "$here/Resources/AppIcon.icns" ]] && cp "$here/Resources/AppIcon.icns" "$app/Contents/Resources/" 2>/dev/null || true
 fi
 xattr -cr "$app"
 codesign --force --sign "$identity" "$app" 2>&1 | grep -v "replacing existing signature" || true

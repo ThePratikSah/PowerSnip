@@ -1,46 +1,72 @@
 import AppKit
-import SwiftData
+import Foundation
 import AiPowerSnipKit
 
 /// Self-test for agents: runs the app's real functions on a test store,
 /// prints PASS or FAIL per check, and quits with exit code 0 or 1.
-///   APP_STORE=/tmp/AiPowerSnip-self.store ~/Applications/AiPowerSnip.app/Contents/MacOS/AiPowerSnip --selftest
-/// (tools/selftest.sh does this.) Add a check for every story with logic.
+///   APP_STORE=/tmp/AiPowerSnip-self-store ~/Applications/AiPowerSnip.app/Contents/MacOS/AiPowerSnip --selftest
 @MainActor
 enum SelfTest {
     static var requested: Bool { CommandLine.arguments.contains("--selftest") }
-    /// Read by AppDelegate.applicationWillTerminate.
     static var exitCode: Int32 = 0
     private static var failures = 0
     private static var count = 0
 
     static func runIfRequested(model: AppModel) {
         guard requested else { return }
-        // Print each line at once, so a crash keeps the lines before it.
         setvbuf(stdout, nil, _IOLBF, 0)
         guard Store.isOverridden else {
-            print("SELFTEST refused: set APP_STORE to a file in /tmp")
+            print("SELFTEST refused: set APP_STORE to a test directory in /tmp")
             finish(code: 1)
             return
         }
+
         Task {
-            try? await Task.sleep(for: .seconds(0.5))
-            let context = model.container.mainContext
-            func items() -> [Item] { (try? context.fetch(FetchDescriptor<Item>())) ?? [] }
+            try? await Task.sleep(for: .seconds(0.3))
 
-            let before = items().count
-            model.addItem()
-            check("New Item adds one item", items().count == before + 1)
-            check("the new item is selected", model.selection != nil)
+            let before = model.screenshots.count
 
-            if let item = items().first(where: { $0.id == model.selection }) {
-                item.isStarred.toggle()
-                check("starring an item marks it starred", item.isStarred)
-                context.delete(item)
-                try? context.save()
-                check("deleting the item removes it", items().count == before)
+            // 1. Add screenshot check
+            let dummyData = Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) // Minimal PNG magic
+            model.addScreenshot(imageData: dummyData, title: "  Test Snip   Title  ")
+            check("addScreenshot increases count", model.screenshots.count == before + 1)
+            check("selected screenshot matches new item", model.selectedScreenshot?.id == model.selection)
+            check("title is cleaned", model.selectedScreenshot?.title == "Test Snip Title")
+
+            guard let testShot = model.selectedScreenshot else {
+                finish(code: 1)
+                return
             }
-            check("titles are cleaned", ItemTitle.clean("  Buy   milk ") == "Buy milk")
+
+            // 2. Add User message check
+            model.addMessage(to: testShot, role: .user, content: "Can you explain this screen?")
+            check("User message is appended", testShot.messages.count == 1)
+            check("Message role is user", testShot.messages.first?.role == .user)
+
+            // 3. Add Assistant markdown message check
+            let markdownSample = """
+                # Overview
+                This is a **test analysis**.
+                - Item 1
+                - Item 2
+                """
+            model.addMessage(to: testShot, role: .assistant, content: markdownSample)
+            check("Assistant message is appended", testShot.messages.count == 2)
+            check("Message role is assistant", testShot.messages.last?.role == .assistant)
+
+            // 4. Persistence check
+            let reloaded = Store.loadScreenshots(from: model.storeDirectory)
+            check("Persistence correctly writes manifest", reloaded.contains { $0.id == testShot.id })
+            if let savedShot = reloaded.first(where: { $0.id == testShot.id }) {
+                check("Saved shot has both messages", savedShot.messages.count == 2)
+            }
+
+            // 5. Delete screenshot check
+            model.deleteScreenshot(testShot)
+            check("deleteScreenshot removes item", model.screenshots.count == before)
+
+            // 6. Title cleaner utility
+            check("ItemTitle clean utility", ItemTitle.clean("  Another   Test  ") == "Another Test")
 
             print(failures == 0 ? "SELFTEST PASS \(count) checks" : "SELFTEST FAIL \(failures) of \(count) checks")
             finish(code: failures == 0 ? 0 : 1)
@@ -53,8 +79,6 @@ enum SelfTest {
         print(ok ? "PASS \(name)" : "FAIL \(name)\(detail.isEmpty ? "" : ": \(detail)")")
     }
 
-    /// Quits through NSApp.terminate, never exit(), and closes sheets first:
-    /// an open sheet refuses terminate, and the run would wait forever.
     static func finish(code: Int32) {
         exitCode = code
         for window in NSApp.windows { if let sheet = window.attachedSheet { window.endSheet(sheet) } }

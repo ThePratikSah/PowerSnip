@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "AiPowerSnip",
-    platforms: [.macOS(.v26)],
+    platforms: [.macOS(.v15)],
     targets: [
         // Rules and data logic with no SwiftUI, so tests run without the app.
         .target(name: "AiPowerSnipKit"),

@@ -54,11 +54,20 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 }
 
 struct GeneralSettings: View {
+    @AppStorage("api.baseURL") private var baseURL = "http://localhost:8080"
     @AppStorage("confirmDelete") private var confirmDelete = true
 
     var body: some View {
-        Section("Items") {
-            Toggle("Ask before deleting items", isOn: $confirmDelete)
+        Section("API") {
+            TextField("Base URL", text: $baseURL)
+                .textFieldStyle(.roundedBorder)
+                .help("The base URL for the /analyse API endpoint")
+            Text("The app sends screenshots to `\(baseURL)/analyse` for AI analysis.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        Section("Screenshots") {
+            Toggle("Ask before deleting screenshots", isOn: $confirmDelete)
         }
     }
 }
