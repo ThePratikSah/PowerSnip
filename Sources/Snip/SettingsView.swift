@@ -122,6 +122,50 @@ struct GeneralSettings: View {
             }
         }
 
+        Section("System Startup") {
+            VStack(alignment: .leading, spacing: 6) {
+                Toggle("Launch Snip at Login", isOn: Binding(
+                    get: { LaunchAtLoginManager.shared.isEnabled },
+                    set: { LaunchAtLoginManager.shared.toggleLaunchAtLogin(enabled: $0) }
+                ))
+
+                Text("Automatically launches Snip in the background when you log into your Mac so the ⌥⇧⌘4 shortcut is always ready.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+
+                if let err = LaunchAtLoginManager.shared.errorMessage {
+                    Text(err)
+                        .font(.caption2)
+                        .foregroundStyle(.red)
+                }
+            }
+        }
+
+        Section("Permissions") {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Image(systemName: ScreenCapturePermissionManager.shared.isGranted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                        .foregroundStyle(ScreenCapturePermissionManager.shared.isGranted ? .green : .orange)
+
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Screen Recording Permission")
+                            .font(.callout.weight(.medium))
+                        Text(ScreenCapturePermissionManager.shared.isGranted ? "Granted — ready to capture" : "Access required to capture screen areas")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    Button("Open System Settings") {
+                        ScreenCapturePermissionManager.shared.openSettings()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            }
+        }
+
         Section("Screenshots") {
             Toggle("Ask before deleting screenshots", isOn: $confirmDelete)
         }

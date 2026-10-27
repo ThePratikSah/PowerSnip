@@ -118,7 +118,7 @@ enum GeminiService {
 
         if !(200...299).contains(httpResponse.statusCode) {
             let errorMsg = parseErrorMessage(from: data) ?? "HTTP \(httpResponse.statusCode)"
-            throw GeminiError.apiError(message: errorMsg)
+            throw GeminiError.apiError(statusCode: httpResponse.statusCode, message: errorMsg)
         }
 
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -276,8 +276,21 @@ enum GeminiService {
         }
 
         if !(200...299).contains(httpResponse.statusCode) {
-            let errorMsg = parseErrorMessage(from: data) ?? "HTTP \(httpResponse.statusCode)"
-            throw GeminiError.apiError(message: errorMsg)
+            let errorDetails = parseErrorDetails(from: data)
+            let message = errorDetails.message ?? "HTTP \(httpResponse.statusCode)"
+            let status = errorDetails.status ?? ""
+
+            if httpResponse.statusCode == 429
+                || status == "RESOURCE_EXHAUSTED"
+                || message.localizedCaseInsensitiveContains("quota")
+                || message.localizedCaseInsensitiveContains("rate limit")
+                || message.localizedCaseInsensitiveContains("resource has been exhausted") {
+                throw GeminiError.rateLimitExceeded(statusCode: httpResponse.statusCode, message: message)
+            } else if httpResponse.statusCode == 400 && message.localizedCaseInsensitiveContains("api key") {
+                throw GeminiError.invalidAPIKey(message: message)
+            } else {
+                throw GeminiError.apiError(statusCode: httpResponse.statusCode, message: message)
+            }
         }
 
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -293,22 +306,35 @@ enum GeminiService {
         return text
     }
 
-    private static func parseErrorMessage(from data: Data) -> String? {
-        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-           let errorObj = json["error"] as? [String: Any],
-           let message = errorObj["message"] as? String {
-            return message
+    private static func parseErrorDetails(from data: Data) -> (code: Int?, message: String?, status: String?) {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let errorObj = json["error"] as? [String: Any] else {
+            return (nil, nil, nil)
         }
-        return nil
+        let code = errorObj["code"] as? Int
+        let message = errorObj["message"] as? String
+        let status = errorObj["status"] as? String
+        return (code, message, status)
+    }
+
+    private static func parseErrorMessage(from data: Data) -> String? {
+        parseErrorDetails(from: data).message
     }
 }
 
-enum GeminiError: LocalizedError {
+enum GeminiError: LocalizedError, Equatable {
     case missingAPIKey
     case invalidURL
     case invalidResponse
     case emptyResponse
-    case apiError(message: String)
+    case rateLimitExceeded(statusCode: Int, message: String)
+    case invalidAPIKey(message: String)
+    case apiError(statusCode: Int, message: String)
+
+    var isRateLimit: Bool {
+        if case .rateLimitExceeded = self { return true }
+        return false
+    }
 
     var errorDescription: String? {
         switch self {
@@ -320,8 +346,12 @@ enum GeminiError: LocalizedError {
             return "Unexpected response from Gemini servers."
         case .emptyResponse:
             return "Gemini returned an empty response. Try asking in a different way."
-        case .apiError(let message):
-            return "Gemini API error: \(message)"
+        case .rateLimitExceeded(let code, let message):
+            return "Rate Limit Exceeded (\(code)): \(message)"
+        case .invalidAPIKey(let message):
+            return "Invalid API Key: \(message)"
+        case .apiError(let code, let message):
+            return "Gemini API Error (\(code)): \(message)"
         }
     }
 }

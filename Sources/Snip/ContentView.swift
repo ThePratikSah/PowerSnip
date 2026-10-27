@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openSettings) private var openSettings
+    @Bindable private var permissionManager = ScreenCapturePermissionManager.shared
 
     var body: some View {
         NavigationSplitView {
@@ -11,11 +12,55 @@ struct ContentView: View {
             ScreenshotDetailView()
         }
         .navigationSplitViewStyle(.balanced)
+        .safeAreaInset(edge: .top) {
+            if !permissionManager.isGranted {
+                permissionMissingBanner
+            }
+        }
+        .sheet(isPresented: $permissionManager.showPermissionPrompt) {
+            ScreenRecordingPermissionSheet()
+        }
         .task {
             SeedData.insertIfRequested(into: model)
             SelfTest.runIfRequested(model: model)
             Snapshot.runIfRequested(model: model, openSettings: openSettings)
+            permissionManager.checkPermission()
         }
+    }
+
+    private var permissionMissingBanner: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "camera.viewfinder")
+                .foregroundStyle(.orange)
+                .font(.headline)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Screen Recording Permission Required")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.primary)
+                Text("Snip needs Screen Recording permission to capture sections of your screen.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Button("Grant Access") {
+                permissionManager.requestPermission()
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+
+            Button("Dismiss") {
+                permissionManager.showPermissionPrompt = false
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(Color.orange.opacity(0.12))
+        .overlay(Rectangle().frame(height: 1).foregroundStyle(Color.orange.opacity(0.3)), alignment: .bottom)
     }
 
     private var sidebar: some View {
@@ -242,7 +287,10 @@ struct ChatOverlayBox: View {
     @Bindable var screenshot: Screenshot
     @State private var inputPrompt: String = ""
     @State private var isAnalyzing: Bool = false
-    @State private var errorText: String? = nil
+    @State private var currentError: GeminiError? = nil
+    @State private var lastFailedQuery: String? = nil
+    @State private var selectedModel: String = GeminiService.model
+    @State private var availableModels: [GeminiService.ModelInfo] = GeminiService.officialModels
     @State private var showAPIKeySheet: Bool = false
     @State private var pendingQuery: String? = nil
 
@@ -292,6 +340,16 @@ struct ChatOverlayBox: View {
                 }
             }
         }
+        .onAppear {
+            selectedModel = GeminiService.model
+            if GeminiService.hasAPIKey {
+                Task {
+                    if let models = try? await GeminiService.getMultimodalModels(), !models.isEmpty {
+                        availableModels = models
+                    }
+                }
+            }
+        }
     }
 
     private var chatHeader: some View {
@@ -310,6 +368,39 @@ struct ChatOverlayBox: View {
             }
 
             Spacer()
+
+            // Dynamic Model Switcher Menu in header
+            Menu {
+                ForEach(availableModels) { m in
+                    Button(action: {
+                        selectedModel = m.shortName
+                        GeminiService.model = m.shortName
+                    }) {
+                        HStack {
+                            Text(m.displayName)
+                            if m.shortName == selectedModel || m.name == selectedModel {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "cpu")
+                        .font(.system(size: 10))
+                    Text(selectedModel.replacingOccurrences(of: "models/", with: ""))
+                        .font(.system(size: 11, weight: .medium))
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.system(size: 8))
+                }
+                .foregroundStyle(Color(hex: 0x374151))
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(Color(hex: 0xF3F4F6), in: Capsule())
+                .overlay(Capsule().stroke(Color(hex: 0xE5E7EB), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .help("Switch Gemini AI Model")
 
             // API Key status/config button
             Button(action: { showAPIKeySheet = true }) {
@@ -393,7 +484,7 @@ struct ChatOverlayBox: View {
                         HStack(spacing: 8) {
                             ProgressView()
                                 .controlSize(.small)
-                            Text("Thinking with Gemini…")
+                            Text("Thinking with \(selectedModel.replacingOccurrences(of: "models/", with: ""))…")
                                 .font(.caption.weight(.medium))
                                 .foregroundStyle(Color(hex: 0x4B5563))
                         }
@@ -403,22 +494,89 @@ struct ChatOverlayBox: View {
                         .id("analyzing_spinner")
                     }
 
-                    if let error = errorText {
-                        HStack(alignment: .top, spacing: 6) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundStyle(.red)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Analysis Error")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(Color(hex: 0x991B1B))
-                                Text(error)
-                                    .font(.caption2)
-                                    .foregroundStyle(Color(hex: 0xB91C1C))
+                    // Intuitive Rate Limit & API Error Resolution Card with Model Switcher
+                    if let error = currentError {
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack(alignment: .top, spacing: 8) {
+                                Image(systemName: error.isRateLimit ? "exclamationmark.triangle.fill" : "xmark.octagon.fill")
+                                    .foregroundStyle(error.isRateLimit ? .orange : .red)
+                                    .font(.title3)
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(error.isRateLimit ? "Rate Limit Exceeded (429)" : "API Request Failed")
+                                        .font(.callout.weight(.semibold))
+                                        .foregroundStyle(error.isRateLimit ? Color(hex: 0x9A3412) : Color(hex: 0x991B1B))
+
+                                    Text(error.isRateLimit
+                                         ? "The model '\(selectedModel.replacingOccurrences(of: "models/", with: ""))' reached its quota or request rate limit. Switch to an alternate model below to continue immediately."
+                                         : (error.errorDescription ?? "An error occurred while contacting the Gemini API."))
+                                        .font(.caption2)
+                                        .foregroundStyle(Color(hex: 0x374151))
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+
+                                Spacer()
+
+                                Button(action: { currentError = nil }) {
+                                    Image(systemName: "xmark")
+                                        .font(.caption2)
+                                        .foregroundStyle(Color(hex: 0x6B7280))
+                                }
+                                .buttonStyle(.plain)
                             }
+
+                            // Model switcher dropdown inside the error resolution card
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Switch Model:")
+                                    .font(.caption2.weight(.medium))
+                                    .foregroundStyle(Color(hex: 0x4B5563))
+
+                                Picker("Switch Model", selection: $selectedModel) {
+                                    ForEach(availableModels) { m in
+                                        Text(m.displayName).tag(m.shortName)
+                                    }
+                                }
+                                .labelsHidden()
+                                .onChange(of: selectedModel) { _, newModel in
+                                    GeminiService.model = newModel
+                                }
+                            }
+
+                            // Action buttons: Retry and Dismiss
+                            HStack(spacing: 8) {
+                                if let _ = lastFailedQuery {
+                                    Button(action: {
+                                        retryFailedQuery()
+                                    }) {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "arrow.clockwise")
+                                            Text("Retry with \(selectedModel.replacingOccurrences(of: "models/", with: ""))")
+                                        }
+                                        .font(.caption.weight(.medium))
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .controlSize(.small)
+                                }
+
+                                Button("Dismiss") {
+                                    currentError = nil
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                            }
+                            .padding(.top, 2)
                         }
-                        .padding(10)
-                        .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        .padding(.horizontal, 8)
+                        .padding(12)
+                        .background(
+                            (error.isRateLimit ? Color.orange : Color.red).opacity(0.08),
+                            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke((error.isRateLimit ? Color.orange : Color.red).opacity(0.25), lineWidth: 1)
+                        )
+                        .padding(.horizontal, 4)
+                        .id("error_resolution_card")
                     }
                 }
                 .padding(12)
@@ -432,6 +590,11 @@ struct ChatOverlayBox: View {
             .onChange(of: isAnalyzing) {
                 if isAnalyzing {
                     withAnimation { proxy.scrollTo("analyzing_spinner", anchor: .bottom) }
+                }
+            }
+            .onChange(of: currentError != nil) {
+                if currentError != nil {
+                    withAnimation { proxy.scrollTo("error_resolution_card", anchor: .bottom) }
                 }
             }
         }
@@ -536,14 +699,15 @@ struct ChatOverlayBox: View {
 
     private func sendQuery(text: String) {
         inputPrompt = ""
-        errorText = nil
+        currentError = nil
         isAnalyzing = true
+        lastFailedQuery = text
 
         // Add user query message
         model.addMessage(to: screenshot, role: .user, content: text)
 
         guard let data = screenshot.loadData(from: model.storeDirectory) else {
-            errorText = "Could not load screenshot data from disk."
+            currentError = .apiError(statusCode: 0, message: "Could not load screenshot data from disk.")
             isAnalyzing = false
             return
         }
@@ -555,12 +719,45 @@ struct ChatOverlayBox: View {
                     query: text
                 )
                 model.addMessage(to: screenshot, role: .assistant, content: markdownResponse)
-            } catch {
-                errorText = error.localizedDescription
-                // If API key was rejected, allow quick update
-                if error.localizedDescription.contains("API key") {
+                lastFailedQuery = nil
+            } catch let geminiErr as GeminiError {
+                currentError = geminiErr
+                if case .invalidAPIKey = geminiErr {
                     showAPIKeySheet = true
                 }
+            } catch {
+                currentError = .apiError(statusCode: 0, message: error.localizedDescription)
+            }
+            isAnalyzing = false
+        }
+    }
+
+    private func retryFailedQuery() {
+        guard let query = lastFailedQuery, !isAnalyzing else { return }
+        currentError = nil
+        isAnalyzing = true
+
+        guard let data = screenshot.loadData(from: model.storeDirectory) else {
+            currentError = .apiError(statusCode: 0, message: "Could not load screenshot data from disk.")
+            isAnalyzing = false
+            return
+        }
+
+        Task {
+            do {
+                let markdownResponse = try await GeminiService.generateAnalysis(
+                    imageData: data,
+                    query: query
+                )
+                model.addMessage(to: screenshot, role: .assistant, content: markdownResponse)
+                lastFailedQuery = nil
+            } catch let geminiErr as GeminiError {
+                currentError = geminiErr
+                if case .invalidAPIKey = geminiErr {
+                    showAPIKeySheet = true
+                }
+            } catch {
+                currentError = .apiError(statusCode: 0, message: error.localizedDescription)
             }
             isAnalyzing = false
         }

@@ -19,6 +19,13 @@ enum ScreenCapture {
     }
 
     private static func executeCapture(mode: Mode, model: AppModel) async {
+        // Verify Screen Recording permission before launching capture
+        if !ScreenCapturePermissionManager.shared.checkPermission() {
+            ScreenCapturePermissionManager.shared.showPermissionPrompt = true
+            ScreenCapturePermissionManager.shared.requestPermission()
+            return
+        }
+
         model.isCapturing = true
         defer { model.isCapturing = false }
 

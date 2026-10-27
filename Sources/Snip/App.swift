@@ -52,6 +52,11 @@ struct SnipApp: App {
 
             Divider()
 
+            Toggle("Launch at Login", isOn: Binding(
+                get: { LaunchAtLoginManager.shared.isEnabled },
+                set: { LaunchAtLoginManager.shared.toggleLaunchAtLogin(enabled: $0) }
+            ))
+
             Button("Open Snip Window") {
                 AppDelegate.showMainWindow()
             }
