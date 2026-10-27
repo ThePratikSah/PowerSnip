@@ -1,8 +1,6 @@
 import SwiftUI
 
-/// The Settings window (Command-Comma). One tab per topic, at most about
-/// six. Each tab is a grouped Form that sizes to its content, so the
-/// window grows to fit and shows no scroll bar it does not need.
+/// The Settings window (Command-Comma). One tab per topic.
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
 
@@ -28,11 +26,10 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .fitsContent()
-        .frame(width: 520)
+        .frame(width: 540)
     }
 }
 
-/// The Settings tabs. Snapshot mode walks through every case.
 enum SettingsTab: String, CaseIterable, Identifiable {
     case general, appearance
 
@@ -54,20 +51,72 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 }
 
 struct GeneralSettings: View {
-    @AppStorage("api.baseURL") private var baseURL = "http://localhost:8080"
+    @AppStorage("gemini.apiKey") private var apiKey = ""
+    @AppStorage("gemini.model") private var selectedModel = "gemini-2.5-flash"
     @AppStorage("confirmDelete") private var confirmDelete = true
+    @State private var showKey = false
 
     var body: some View {
-        Section("API") {
-            TextField("Base URL", text: $baseURL)
-                .textFieldStyle(.roundedBorder)
-                .help("The base URL for the /analyse API endpoint")
-            Text("The app sends screenshots to `\(baseURL)/analyse` for AI analysis.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+        Section("Google Gemini API") {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    if showKey {
+                        TextField("API Key", text: $apiKey)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(.body, design: .monospaced))
+                    } else {
+                        SecureField("API Key", text: $apiKey)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(.body, design: .monospaced))
+                    }
+
+                    Button(action: { showKey.toggle() }) {
+                        Image(systemName: showKey ? "eye.slash" : "eye")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help(showKey ? "Hide API key" : "Show API key")
+                }
+
+                Picker("Model", selection: $selectedModel) {
+                    ForEach(GeminiService.availableModels, id: \.self) { model in
+                        Text(model).tag(model)
+                    }
+                }
+
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "lock.shield.fill")
+                        .font(.caption)
+                        .foregroundStyle(.green)
+                    Text("Your API key is stored locally on your Mac and is not sent anywhere except directly to the official Google Gemini API.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.top, 2)
+
+                Link(destination: URL(string: "https://aistudio.google.com/app/apikey")!) {
+                    HStack(spacing: 4) {
+                        Text("Get a free Gemini API Key at Google AI Studio")
+                        Image(systemName: "arrow.up.right.square")
+                    }
+                    .font(.caption)
+                }
+            }
         }
+
         Section("Screenshots") {
             Toggle("Ask before deleting screenshots", isOn: $confirmDelete)
+        }
+
+        Section("Storage & Privacy") {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Chat and screenshot data are stored locally in:")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text("~/Library/Application Support/AiPowerSnip/")
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.primary)
+            }
         }
     }
 }

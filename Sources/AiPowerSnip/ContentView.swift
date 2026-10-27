@@ -153,7 +153,7 @@ struct ActiveScreenshotCanvas: View {
             screenshotDisplay
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            // Small AI Analysis Chat Overlay Box
+            // Small AI Analysis Chat Overlay Box - Forced Light Mode
             if isChatVisible {
                 ChatOverlayBox(screenshot: screenshot)
                     .frame(width: 420, height: 520)
@@ -171,7 +171,7 @@ struct ActiveScreenshotCanvas: View {
                         isChatVisible.toggle()
                     }
                 }) {
-                    Label(isChatVisible ? "Hide Chat" : "Ask AI",
+                    Label(isChatVisible ? "Hide Chat" : "Ask Gemini",
                           systemImage: isChatVisible ? "bubble.right.fill" : "sparkles")
                 }
                 .help(isChatVisible ? "Hide question box" : "Show question box")
@@ -220,7 +220,7 @@ struct ActiveScreenshotCanvas: View {
     }
 }
 
-// MARK: - Small AI Chat Box Overlay
+// MARK: - Small AI Chat Box Overlay (FORCED LIGHT MODE)
 
 struct ChatOverlayBox: View {
     @Environment(AppModel.self) private var model
@@ -228,33 +228,55 @@ struct ChatOverlayBox: View {
     @State private var inputPrompt: String = ""
     @State private var isAnalyzing: Bool = false
     @State private var errorText: String? = nil
+    @State private var showAPIKeySheet: Bool = false
+    @State private var pendingQuery: String? = nil
 
     var body: some View {
         VStack(spacing: 0) {
             // Header
             chatHeader
-            Divider()
+            Divider().background(Color(hex: 0xE5E7EB))
+
+            // API key missing banner
+            if !GeminiService.hasAPIKey {
+                apiKeyWarningBanner
+                Divider().background(Color(hex: 0xE5E7EB))
+            }
 
             // Message Scroll Stream
             chatHistory
-            Divider()
+            Divider().background(Color(hex: 0xE5E7EB))
 
             // Quick suggestion chips (if conversation is fresh)
             if screenshot.messages.isEmpty {
                 suggestionChips
-                Divider()
+                Divider().background(Color(hex: 0xE5E7EB))
             }
 
             // Input bar
             chatInputBar
         }
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+        // FORCED 100% LIGHT MODE WITH SOLID WHITE BACKGROUND (NO DARK TINT FROM SCREENSHOT)
+        .environment(\.colorScheme, .light)
+        .preferredColorScheme(.light)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.white)
+                .shadow(color: Color.black.opacity(0.16), radius: 24, x: 0, y: 8)
         )
-        .shadow(color: Color.black.opacity(0.20), radius: 20, x: 0, y: 8)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color(hex: 0xE2E8F0), lineWidth: 1)
+        )
+        .sheet(isPresented: $showAPIKeySheet) {
+            GeminiAPIKeySheet(isPresented: $showAPIKeySheet) {
+                if let query = pendingQuery {
+                    pendingQuery = nil
+                    sendQuery(text: query)
+                }
+            }
+        }
     }
 
     private var chatHeader: some View {
@@ -264,14 +286,37 @@ struct ChatOverlayBox: View {
                 .foregroundStyle(Palette.accent)
 
             VStack(alignment: .leading, spacing: 1) {
-                Text("AI Snip Assistant")
+                Text("Gemini Snip Assistant")
                     .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color(hex: 0x111827))
                 Text("Ask anything about this screenshot")
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color(hex: 0x6B7280))
             }
 
             Spacer()
+
+            // API Key status/config button
+            Button(action: { showAPIKeySheet = true }) {
+                HStack(spacing: 3) {
+                    Image(systemName: "key.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(GeminiService.hasAPIKey ? Color.green : Color.orange)
+                    if !GeminiService.hasAPIKey {
+                        Text("Add Key")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(Color.orange)
+                    }
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(
+                    (GeminiService.hasAPIKey ? Color.green : Color.orange).opacity(0.12),
+                    in: Capsule()
+                )
+            }
+            .buttonStyle(.plain)
+            .help(GeminiService.hasAPIKey ? "Configure Gemini API Key" : "Set Gemini API Key to enable AI analysis")
 
             if !screenshot.messages.isEmpty {
                 Button(action: {
@@ -279,7 +324,7 @@ struct ChatOverlayBox: View {
                 }) {
                     Image(systemName: "trash")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color(hex: 0x9CA3AF))
                 }
                 .buttonStyle(.plain)
                 .help("Clear conversation")
@@ -287,7 +332,33 @@ struct ChatOverlayBox: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(Color.primary.opacity(0.03))
+        .background(Color.white)
+    }
+
+    private var apiKeyWarningBanner: some View {
+        Button(action: { showAPIKeySheet = true }) {
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.circle.fill")
+                    .foregroundStyle(.orange)
+                    .font(.subheadline)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Gemini API Key Required")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color(hex: 0x1F2937))
+                    Text("Click here to paste your free Google Gemini API key.")
+                        .font(.caption2)
+                        .foregroundStyle(Color(hex: 0x4B5563))
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color.orange.opacity(0.08))
+        }
+        .buttonStyle(.plain)
     }
 
     private var chatHistory: some View {
@@ -307,28 +378,37 @@ struct ChatOverlayBox: View {
                         HStack(spacing: 8) {
                             ProgressView()
                                 .controlSize(.small)
-                            Text("Analyzing screenshot with `/analyse`…")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                            Text("Thinking with Gemini…")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(Color(hex: 0x4B5563))
                         }
                         .padding(.horizontal, 14)
-                        .padding(.vertical, 6)
+                        .padding(.vertical, 8)
+                        .background(Color(hex: 0xF3F4F6), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                         .id("analyzing_spinner")
                     }
 
                     if let error = errorText {
-                        HStack(spacing: 6) {
+                        HStack(alignment: .top, spacing: 6) {
                             Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundStyle(.orange)
-                            Text(error)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(.red)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Analysis Error")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(Color(hex: 0x991B1B))
+                                Text(error)
+                                    .font(.caption2)
+                                    .foregroundStyle(Color(hex: 0xB91C1C))
+                            }
                         }
-                        .padding(.horizontal, 14)
+                        .padding(10)
+                        .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .padding(.horizontal, 8)
                     }
                 }
                 .padding(12)
             }
+            .background(Color(hex: 0xFAFAFA))
             .onChange(of: screenshot.messages.count) {
                 if let lastID = screenshot.messages.last?.id {
                     withAnimation { proxy.scrollTo(lastID, anchor: .bottom) }
@@ -344,17 +424,18 @@ struct ChatOverlayBox: View {
 
     private var emptyPromptView: some View {
         VStack(spacing: 8) {
-            Image(systemName: "text.magnifyingglass")
+            Image(systemName: "sparkles")
                 .font(.system(size: 32))
-                .foregroundStyle(.secondary.opacity(0.6))
+                .foregroundStyle(Palette.accent.opacity(0.8))
                 .padding(.top, 12)
 
-            Text("What would you like to know?")
-                .font(.callout.weight(.medium))
+            Text("Ask Gemini about this screen")
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(Color(hex: 0x111827))
 
-            Text("Type any question below or pick a suggestion to analyze this screen.")
+            Text("Type any question below or pick a suggestion to analyze text, layout, UI code, or data.")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color(hex: 0x6B7280))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 16)
         }
@@ -373,19 +454,21 @@ struct ChatOverlayBox: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
         }
-        .background(Color.primary.opacity(0.02))
+        .background(Color.white)
     }
 
     private func suggestionButton(_ text: String) -> some View {
         Button(action: {
             inputPrompt = text
-            sendQuery()
+            triggerSend()
         }) {
             Text(text)
                 .font(.caption2.weight(.medium))
+                .foregroundStyle(Color(hex: 0x374151))
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
-                .background(Color.primary.opacity(0.07), in: Capsule())
+                .background(Color(hex: 0xF3F4F6), in: Capsule())
+                .overlay(Capsule().stroke(Color(hex: 0xE5E7EB), lineWidth: 1))
         }
         .buttonStyle(.plain)
     }
@@ -395,59 +478,81 @@ struct ChatOverlayBox: View {
             TextField("Ask about screenshot…", text: $inputPrompt, axis: .vertical)
                 .textFieldStyle(.plain)
                 .lineLimit(1...4)
+                .font(.callout)
+                .foregroundStyle(Color(hex: 0x111827))
                 .padding(.horizontal, 10)
                 .padding(.vertical, 7)
-                .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .onSubmit { sendQuery() }
+                .background(Color(hex: 0xF3F4F6), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(Color(hex: 0xE5E7EB), lineWidth: 1)
+                )
+                .onSubmit { triggerSend() }
 
-            Button(action: sendQuery) {
+            Button(action: triggerSend) {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.title2)
-                    .foregroundStyle(canSend ? Palette.accent : Color.secondary.opacity(0.35))
+                    .foregroundStyle(canSend ? Palette.accent : Color(hex: 0xD1D5DB))
             }
             .buttonStyle(.plain)
             .disabled(!canSend)
             .keyboardShortcut(.return, modifiers: [])
         }
         .padding(10)
+        .background(Color.white)
     }
 
     private var canSend: Bool {
         !inputPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isAnalyzing
     }
 
-    private func sendQuery() {
+    private func triggerSend() {
         let trimmed = inputPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !isAnalyzing else { return }
 
-        // Add user query message
-        model.addMessage(to: screenshot, role: .user, content: trimmed)
+        if !GeminiService.hasAPIKey {
+            pendingQuery = trimmed
+            showAPIKeySheet = true
+            return
+        }
+
+        sendQuery(text: trimmed)
+    }
+
+    private func sendQuery(text: String) {
         inputPrompt = ""
         errorText = nil
         isAnalyzing = true
 
+        // Add user query message
+        model.addMessage(to: screenshot, role: .user, content: text)
+
         guard let data = screenshot.loadData(from: model.storeDirectory) else {
-            errorText = "Could not load screenshot data."
+            errorText = "Could not load screenshot data from disk."
             isAnalyzing = false
             return
         }
 
         Task {
             do {
-                let markdownResponse = try await AnalyseService.analyse(
+                let markdownResponse = try await GeminiService.generateAnalysis(
                     imageData: data,
-                    query: trimmed
+                    query: text
                 )
                 model.addMessage(to: screenshot, role: .assistant, content: markdownResponse)
             } catch {
                 errorText = error.localizedDescription
+                // If API key was rejected, allow quick update
+                if error.localizedDescription.contains("API key") {
+                    showAPIKeySheet = true
+                }
             }
             isAnalyzing = false
         }
     }
 }
 
-// MARK: - Chat Message Bubble
+// MARK: - Chat Message Bubble (FORCED LIGHT MODE)
 
 struct ChatMessageBubble: View {
     let message: ChatMessage
@@ -464,7 +569,7 @@ struct ChatMessageBubble: View {
                 } else {
                     Text(message.content)
                         .font(.callout)
-                        .foregroundStyle(Palette.onAccent)
+                        .foregroundStyle(Color.white)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -475,7 +580,7 @@ struct ChatMessageBubble: View {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .stroke(borderColor, lineWidth: 1)
             )
-            .shadow(color: Color.black.opacity(message.role == .assistant ? 0.05 : 0.0), radius: 3, y: 1)
+            .shadow(color: Color.black.opacity(message.role == .assistant ? 0.04 : 0.0), radius: 2, y: 1)
 
             if message.role == .assistant {
                 Spacer(minLength: 16)
@@ -487,7 +592,8 @@ struct ChatMessageBubble: View {
         if message.role == .user {
             return AnyShapeStyle(Palette.accent)
         } else {
-            return AnyShapeStyle(Color(nsColor: .controlBackgroundColor))
+            // Pure white card on light gray background
+            return AnyShapeStyle(Color.white)
         }
     }
 
@@ -495,7 +601,7 @@ struct ChatMessageBubble: View {
         if message.role == .user {
             return Color.clear
         } else {
-            return Color.primary.opacity(0.08)
+            return Color(hex: 0xE5E7EB)
         }
     }
 }

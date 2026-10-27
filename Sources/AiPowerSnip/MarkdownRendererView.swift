@@ -73,6 +73,18 @@ enum MarkdownParser {
                 continue
             }
 
+            if trimmed.hasPrefix("# ") {
+                blocks.append(.h1(String(trimmed.dropFirst(2)).trimmingCharacters(in: .whitespaces)))
+                i += 1
+                continue
+            }
+
+            if trimmed.hasPrefix("## ") {
+                blocks.append(.h2(String(trimmed.dropFirst(3)).trimmingCharacters(in: .whitespaces)))
+                i += 1
+                continue
+            }
+
             if trimmed.hasPrefix("### ") {
                 blocks.append(.h3(String(trimmed.dropFirst(4)).trimmingCharacters(in: .whitespaces)))
                 i += 1
@@ -87,18 +99,6 @@ enum MarkdownParser {
 
             if trimmed.hasPrefix("##### ") {
                 blocks.append(.h3(String(trimmed.dropFirst(6)).trimmingCharacters(in: .whitespaces)))
-                i += 1
-                continue
-            }
-
-            if trimmed.hasPrefix("## ") {
-                blocks.append(.h2(String(trimmed.dropFirst(3)).trimmingCharacters(in: .whitespaces)))
-                i += 1
-                continue
-            }
-
-            if trimmed.hasPrefix("# ") {
-                blocks.append(.h1(String(trimmed.dropFirst(2)).trimmingCharacters(in: .whitespaces)))
                 i += 1
                 continue
             }
@@ -169,14 +169,14 @@ enum MarkdownParser {
     }
 }
 
-/// Renders a full structured markdown document with proper spacing, formatting, and highlights.
+/// Renders a full structured markdown document formatted for clean readability in light mode.
 struct MarkdownRendererView: View {
     let markdown: String
 
     var body: some View {
         let blocks = MarkdownParser.parse(markdown)
 
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 7) {
             ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
                 blockView(for: block)
             }
@@ -190,7 +190,7 @@ struct MarkdownRendererView: View {
         case .h1(let text):
             Text(inline(text))
                 .font(.title3.weight(.bold))
-                .foregroundStyle(Color.primary)
+                .foregroundStyle(Color(hex: 0x111827))
                 .padding(.top, 6)
                 .padding(.bottom, 2)
 
@@ -204,7 +204,7 @@ struct MarkdownRendererView: View {
         case .h3(let text):
             Text(inline(text))
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Color.primary)
+                .foregroundStyle(Color(hex: 0x1F2937))
                 .padding(.top, 4)
                 .padding(.bottom, 1)
 
@@ -215,7 +215,7 @@ struct MarkdownRendererView: View {
                     .frame(width: 3)
                 Text(inline(text))
                     .font(.callout)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color(hex: 0x4B5563))
                     .lineSpacing(2)
             }
             .padding(.horizontal, 10)
@@ -231,6 +231,7 @@ struct MarkdownRendererView: View {
                     .padding(.top, 6)
                 Text(inline(text))
                     .font(.callout)
+                    .foregroundStyle(Color(hex: 0x1F2937))
                     .lineSpacing(2)
             }
             .padding(.leading, 4)
@@ -244,6 +245,7 @@ struct MarkdownRendererView: View {
                     .frame(minWidth: 18, alignment: .trailing)
                 Text(inline(text))
                     .font(.callout)
+                    .foregroundStyle(Color(hex: 0x1F2937))
                     .lineSpacing(2)
             }
             .padding(.leading, 2)
@@ -255,7 +257,7 @@ struct MarkdownRendererView: View {
                     HStack {
                         Text(lang.uppercased())
                             .font(.system(size: 9, weight: .bold, design: .monospaced))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color(hex: 0x6B7280))
                         Spacer()
                         Button(action: {
                             NSPasteboard.general.clearContents()
@@ -265,28 +267,29 @@ struct MarkdownRendererView: View {
                                 Image(systemName: "doc.on.doc")
                                 Text("Copy")
                             }
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(Color(hex: 0x4B5563))
                         }
                         .buttonStyle(.plain)
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
-                    .background(Color.primary.opacity(0.04))
+                    .background(Color(hex: 0xF1F5F9))
                     Divider()
                 }
 
                 ScrollView(.horizontal, showsIndicators: false) {
                     Text(code)
-                        .font(.system(size: 12, design: .monospaced))
+                        .font(.system(size: 11.5, design: .monospaced))
+                        .foregroundStyle(Color(hex: 0x0F172A))
                         .padding(10)
                         .textSelection(.enabled)
                 }
             }
-            .background(Color(nsColor: .textBackgroundColor).opacity(0.85), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .background(Color(hex: 0xF8FAFC), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                    .stroke(Color(hex: 0xE2E8F0), lineWidth: 1)
             )
             .padding(.vertical, 3)
 
@@ -297,6 +300,7 @@ struct MarkdownRendererView: View {
         case .paragraph(let text):
             Text(inline(text))
                 .font(.callout)
+                .foregroundStyle(Color(hex: 0x1F2937))
                 .lineSpacing(2)
                 .padding(.vertical, 1)
         }
